@@ -1,0 +1,37 @@
+import { getD1 } from "../db";
+
+let bootstrapped = false;
+
+export async function ensureDatabase() {
+  if (bootstrapped) {
+    return;
+  }
+
+  const d1 = getD1();
+  await d1.batch([
+    d1.prepare(
+      "CREATE TABLE IF NOT EXISTS sources (id text PRIMARY KEY NOT NULL, name text NOT NULL, url text NOT NULL, kind text NOT NULL, created_at integer NOT NULL)",
+    ),
+    d1.prepare(
+      "CREATE TABLE IF NOT EXISTS articles (id text PRIMARY KEY NOT NULL, source_id text, title text NOT NULL, canonical_url text NOT NULL, content text, published_at integer, saved_at integer, read_at integer, status text DEFAULT 'new' NOT NULL, FOREIGN KEY (source_id) REFERENCES sources(id))",
+    ),
+    d1.prepare(
+      "CREATE TABLE IF NOT EXISTS article_insights (id text PRIMARY KEY NOT NULL, article_id text NOT NULL, provider text NOT NULL, summary text, translation_zh text, score integer, created_at integer NOT NULL, FOREIGN KEY (article_id) REFERENCES articles(id))",
+    ),
+    d1.prepare(
+      "CREATE TABLE IF NOT EXISTS daily_briefs (id text PRIMARY KEY NOT NULL, summary text NOT NULL, recommendations text NOT NULL, article_ids text NOT NULL, created_at integer NOT NULL)",
+    ),
+    d1.prepare("CREATE INDEX IF NOT EXISTS articles_source_idx ON articles(source_id)"),
+    d1.prepare("CREATE INDEX IF NOT EXISTS articles_published_idx ON articles(published_at)"),
+  ]);
+
+  try {
+    await d1.prepare("ALTER TABLE articles ADD COLUMN read_at integer").run();
+  } catch (error) {
+    if (!(error instanceof Error) || !/duplicate column name/i.test(error.message)) {
+      throw error;
+    }
+  }
+
+  bootstrapped = true;
+}

@@ -17,6 +17,7 @@ CREATE TABLE `articles` (
 	`content` text,
 	`published_at` integer,
 	`saved_at` integer,
+	`read_at` integer,
 	`status` text DEFAULT 'new' NOT NULL,
 	FOREIGN KEY (`source_id`) REFERENCES `sources`(`id`) ON UPDATE no action ON DELETE no action
 );
