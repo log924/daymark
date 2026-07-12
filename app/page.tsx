@@ -1,6 +1,7 @@
 "use client";
 
 import { Dispatch, FormEvent, SetStateAction, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 
 type Source = {
   id: string;
@@ -188,6 +189,9 @@ export default function Home() {
   const briefArticles = articles.slice(0, showAll ? 6 : 3);
   const savedArticles = articles.filter((article) => article.status === "saved" || saved.includes(article.id));
   const readArticles = articles.filter((article) => article.readAt).sort((a, b) => (b.readAt ?? 0) - (a.readAt ?? 0));
+  // The API returns books newest first. Keep the dashboard shelf intentionally small
+  // while preserving the full collection on each status page.
+  const latestBooks = books.slice(0, 20);
   const selectedLatestSource = sources.find((source) => source.id === selectedLatestSourceId) ?? sources[0] ?? null;
   const latestUnreadArticles = selectedLatestSource
     ? articles.filter((article) => article.sourceId === selectedLatestSource.id && !article.readAt).sort((a, b) => (b.publishedAt ?? 0) - (a.publishedAt ?? 0))
@@ -585,8 +589,12 @@ export default function Home() {
 
         {active === "Books" && <section className="books-panel">
           <div className="section-heading"><div><p className="eyebrow">PERSONAL LIBRARY</p><h2>Your reading shelf</h2></div><button className="text-button" onClick={() => setShowCapture(true)}>Add a book <span>→</span></button></div>
-          <p className="books-intro">Keep what you’ve read, are reading, and want to read in one place. Add a title or paste a Goodreads/Douban page; then use your reading history to assess the fit.</p>
-          <div className="book-columns">{(["reading", "to_read", "read"] as const).map((status) => <section className="book-column" key={status}><div className="book-column-head"><span>{status === "reading" ? "Reading now" : status === "to_read" ? "To be read" : "Read"}</span><b>{books.filter((book) => book.status === status).length}</b></div>{books.filter((book) => book.status === status).map((book) => <article className="book-card" key={book.id} role="button" tabIndex={0} onClick={() => openBook(book)} onKeyDown={(event) => event.key === "Enter" && openBook(book)}>{book.coverUrl ? <img src={bookCoverSrc(book.coverUrl)} alt="" /> : <div className="book-spine">{book.title.slice(0, 1)}</div>}<div className="book-card-main"><p className="eyebrow">{displayAuthor(book.author) ?? "AUTHOR UNKNOWN"}</p><h3>{book.title}</h3>{book.description && <p className="book-description">{book.description}</p>}{book.interestScore !== null && <div className="fit-score"><strong>{book.interestScore}</strong><span>interest fit</span></div>}<button className="analyze-button" disabled={busy} onClick={(event) => { event.stopPropagation(); void analyzeBook(book); }}>{book.analysis ? "Refresh fit analysis" : "Analyze fit"}</button></div></article>)}{!books.some((book) => book.status === status) && <div className="empty-books">Nothing here yet.</div>}</section>)}</div>
+          <p className="books-intro">Your 20 most recently added or updated books are shown here. Choose a status title to browse that entire shelf.</p>
+          <div className="book-columns">{(["reading", "to_read", "read"] as const).map((status) => {
+            const statusLabel = status === "reading" ? "Reading now" : status === "to_read" ? "To be read" : "Read";
+            const statusBooks = latestBooks.filter((book) => book.status === status);
+            return <section className="book-column" key={status}><div className="book-column-head"><Link href={`/books/${status}`} aria-label={`View all ${statusLabel.toLowerCase()} books`}>{statusLabel}</Link><b>{books.filter((book) => book.status === status).length}</b></div><div className="book-column-list">{statusBooks.map((book) => <article className="book-card" key={book.id} role="button" tabIndex={0} onClick={() => openBook(book)} onKeyDown={(event) => event.key === "Enter" && openBook(book)}>{book.coverUrl ? <img src={bookCoverSrc(book.coverUrl)} alt="" /> : <div className="book-spine">{book.title.slice(0, 1)}</div>}<div className="book-card-main"><p className="eyebrow">{displayAuthor(book.author) ?? "AUTHOR UNKNOWN"}</p><h3>{book.title}</h3>{book.description && <p className="book-description">{book.description}</p>}{book.interestScore !== null && <div className="fit-score"><strong>{book.interestScore}</strong><span>interest fit</span></div>}<button className="analyze-button" disabled={busy} onClick={(event) => { event.stopPropagation(); void analyzeBook(book); }}>{book.analysis ? "Refresh fit analysis" : "Analyze fit"}</button></div></article>)}{!statusBooks.length && <div className="empty-books">Nothing from the latest 20 here yet.</div>}</div></section>;
+          })}</div>
         </section>}
 
         {active === "Brief" && dailyBrief && <section className="daily-brief"><div className="section-heading"><div><p className="eyebrow">DEEPSEEK DAILY BRIEF · {new Date(dailyBrief.createdAt).toLocaleString()}</p><h2>What you need to know</h2></div><button className="text-button" onClick={() => void refreshAllFeeds()} disabled={busy}>Refresh all feeds <span>↻</span></button></div><OutlineSummary markdown={dailyBrief.summary} /><div className="brief-recommendations"><p className="eyebrow">RECOMMENDED READING</p>{briefRecommendations.map((recommendation, index) => <div className="brief-recommendation" key={index}><p>{recommendation.text}</p><div>{recommendation.articleIds.map((id) => { const article = articles.find((item) => item.id === id); return article ? <a key={id} href={`#article-${id}`} onClick={(event) => { event.preventDefault(); openArticle(article); }}>Read: {article.title} <span>→</span></a> : null; })}</div></div>)}</div></section>}
