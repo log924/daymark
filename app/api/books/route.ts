@@ -15,6 +15,10 @@ function cleanText(value: string | undefined) {
   return value?.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim() || null;
 }
 
+function descriptionText(value: string | undefined) {
+  return value?.replace(/<br\s*\/?>/gi, "\n").replace(/<\/p>/gi, "\n\n").replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim() || null;
+}
+
 function doubanHeaders() {
   return {
     "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
@@ -35,7 +39,7 @@ function doubanDetails(html: string) {
   const reportStart = html.search(/<div\b[^>]*\bid=["']link-report["'][^>]*>/i);
   const report = reportStart >= 0 ? html.slice(reportStart) : "";
   const intros = Array.from(report.matchAll(/<div\b[^>]*\bclass=["'][^"']*\bintro\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi));
-  const description = cleanText((intros[1] ?? intros[0])?.[1]);
+  const description = descriptionText((intros[1] ?? intros[0])?.[1]);
   const subjects = Array.from(html.matchAll(/<a[^>]+class=["'][^"']*\btag\b[^"']*["'][^>]*>([^<]+)<\/a>/gi)).map((match) => cleanText(match[1])).filter(Boolean).slice(0, 12).join(", ") || null;
   return { title, author: label("作者") ?? label("译者"), description, coverUrl, subjects, isbn: label("ISBN"), publishedYear: label("出版年") };
 }

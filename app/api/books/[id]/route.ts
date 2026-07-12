@@ -6,6 +6,7 @@ import { generateBookAnalysis, type AiSettings } from "../../../../lib/ai";
 import { toRouteErrorMessage } from "../../../../lib/route-errors";
 
 function cleanText(value: string | undefined) { return value?.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim() || null; }
+function descriptionText(value: string | undefined) { return value?.replace(/<br\s*\/?>/gi, "\n").replace(/<\/p>/gi, "\n\n").replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim() || null; }
 function doubanHeaders() { return { "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36", accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", referer: "https://book.douban.com/" }; }
 function doubanDetails(html: string) {
   const info = html.match(/<div id=["']info["'][^>]*>([\s\S]*?)<\/div>/i)?.[1] ?? "";
@@ -14,7 +15,7 @@ function doubanDetails(html: string) {
   const intros = Array.from((reportStart >= 0 ? html.slice(reportStart) : "").matchAll(/<div\b[^>]*\bclass=["'][^"']*\bintro\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi));
   return {
     title: cleanText(html.match(/<span[^>]+property=["']v:itemreviewed["'][^>]*>([\s\S]*?)<\/span>/i)?.[1]),
-    author: label("作者") ?? label("译者"), description: cleanText((intros[1] ?? intros[0])?.[1]),
+    author: label("作者") ?? label("译者"), description: descriptionText((intros[1] ?? intros[0])?.[1]),
     coverUrl: html.match(/<a[^>]+class=["'][^"']*\bnbg\b[^"']*["'][^>]+href=["']([^"']+)["']/i)?.[1] ?? null,
     subjects: Array.from(html.matchAll(/<a[^>]+class=["'][^"']*\btag\b[^"']*["'][^>]*>([^<]+)<\/a>/gi)).map((match) => cleanText(match[1])).filter(Boolean).slice(0, 12).join(", ") || null,
     isbn: label("ISBN"), publishedYear: label("出版年"),
