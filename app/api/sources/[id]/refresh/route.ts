@@ -47,6 +47,9 @@ export async function POST(_request: Request, context: Params) {
         .limit(1);
 
       if (existing[0]) {
+        if (item.content) {
+          await db.update(articles).set({ content: item.content }).where(eq(articles.id, existing[0].id));
+        }
         skipped += 1;
         continue;
       }

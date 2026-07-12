@@ -70,7 +70,8 @@ function relativeTime(timestamp: number | null) {
 
 function articleSnippet(article: Article) {
   if (article.content) {
-    return article.content.length > 230 ? `${article.content.slice(0, 230)}...` : article.content;
+    const text = article.content.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+    return text.length > 230 ? `${text.slice(0, 230)}...` : text;
   }
 
   return "No extracted body yet. Open the original article, or use the later Chrome extension capture flow to save full text.";
@@ -516,9 +517,7 @@ export default function Home() {
         <div className="modal-backdrop reader-backdrop" role="dialog" aria-modal="true" aria-label="Article reader" onClick={() => setSelectedArticle(null)}>
           <article className="reader-modal" onClick={(event) => event.stopPropagation()}>
             <div className="modal-head"><div><p className="eyebrow">{selectedSource?.name ?? "SAVED PAGE"} · {relativeTime(selectedArticle.publishedAt ?? selectedArticle.savedAt)}</p><h2>{selectedArticle.title}</h2></div><button onClick={() => setSelectedArticle(null)} aria-label="Close">×</button></div>
-            <div className="reader-body">
-              <p>{selectedArticle.content || "Daymark does not have the full article text yet. RSS feeds often include only a preview; the upcoming page capture flow will save full page content for local reading and DeepSeek processing."}</p>
-            </div>
+            <div className="reader-body">{selectedArticle.content ? <div dangerouslySetInnerHTML={{ __html: selectedArticle.content }} /> : <p>Daymark does not have the full article text yet. RSS feeds often include only a preview; the upcoming page capture flow will save full page content for local reading and DeepSeek processing.</p>}</div>
             {selectedInsight && (
               <section className="insight-panel">
                 <div>

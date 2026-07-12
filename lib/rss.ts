@@ -25,6 +25,34 @@ function stripHtml(value: string) {
   return decodeEntities(value.replace(/<[^>]*>/g, " ").replace(/\s+/g, " "));
 }
 
+const allowedHtmlTags = new Set(["a", "b", "blockquote", "br", "code", "em", "h1", "h2", "h3", "h4", "i", "li", "ol", "p", "pre", "strong", "ul"]);
+
+function escapeAttribute(value: string) {
+  return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+}
+
+function sanitizeFeedHtml(value: string, baseUrl: string) {
+  const withoutUnsafeBlocks = value
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/<(script|style|iframe|object|embed|form)\b[^>]*>[\s\S]*?<\/\1>/gi, "");
+
+  return withoutUnsafeBlocks
+    .replace(/<\/?([a-z0-9]+)(?:\s[^>]*)?>/gi, (tag, rawTag: string) => {
+      const name = rawTag.toLowerCase();
+      if (!allowedHtmlTags.has(name)) return "";
+      if (tag.startsWith("</")) return `</${name}>`;
+      if (name !== "a") return `<${name}>`;
+
+      const href = tag.match(/\bhref\s*=\s*["']([^"']+)["']/i)?.[1];
+      const url = href ? normalizeUrl(decodeEntities(href), baseUrl) : "";
+      return url && /^https?:$/i.test(new URL(url).protocol)
+        ? `<a href="${escapeAttribute(url)}" target="_blank" rel="noreferrer">`
+        : "<a>";
+    })
+    .replace(/\r?\n/g, "<br>")
+    .slice(0, 20_000);
+}
+
 function firstTag(xml: string, names: string[]) {
   for (const name of names) {
     const match = xml.match(new RegExp(`<${name}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${name}>`, "i"));
@@ -75,7 +103,7 @@ function parseEntry(entryXml: string, baseUrl: string): ParsedFeedItem | null {
   return {
     title,
     url,
-    content: content ? stripHtml(content).slice(0, 4000) : null,
+    content: content ? sanitizeFeedHtml(content, baseUrl) : null,
     publishedAt,
   };
 }
