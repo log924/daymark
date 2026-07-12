@@ -32,7 +32,10 @@ function doubanDetails(html: string) {
   const label = (name: string) => cleanText(info.match(new RegExp(`${name}[^<]*<\\/span>\\s*([^<]*(?:<a[^>]*>[^<]*<\\/a>[^<]*)*)`, "i"))?.[1]);
   const title = cleanText(html.match(/<span[^>]+property=["']v:itemreviewed["'][^>]*>([\s\S]*?)<\/span>/i)?.[1]);
   const coverUrl = html.match(/<a[^>]+class=["'][^"']*\bnbg\b[^"']*["'][^>]+href=["']([^"']+)["']/i)?.[1] ?? null;
-  const description = cleanText(html.match(/<div id=["']link-report["'][\s\S]*?<div[^>]+class=["'][^"']*intro[^"']*["'][^>]*>([\s\S]*?)<\/div>\s*<\/div>/i)?.[1]);
+  const reportStart = html.search(/<div\b[^>]*\bid=["']link-report["'][^>]*>/i);
+  const report = reportStart >= 0 ? html.slice(reportStart) : "";
+  const intros = Array.from(report.matchAll(/<div\b[^>]*\bclass=["'][^"']*\bintro\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi));
+  const description = cleanText((intros[1] ?? intros[0])?.[1]);
   const subjects = Array.from(html.matchAll(/<a[^>]+class=["'][^"']*\btag\b[^"']*["'][^>]*>([^<]+)<\/a>/gi)).map((match) => cleanText(match[1])).filter(Boolean).slice(0, 12).join(", ") || null;
   return { title, author: label("作者") ?? label("译者"), description, coverUrl, subjects, isbn: label("ISBN"), publishedYear: label("出版年") };
 }
