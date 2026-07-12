@@ -73,6 +73,14 @@ function bookConnections(book: Book): BookConnection[] {
 function bookTags(book: Book) {
   try { return book.aiTags ? JSON.parse(book.aiTags) as string[] : []; } catch { return []; }
 }
+function statusChangeInputValue(timestamp: number | null) {
+  if (!timestamp) return "";
+  const local = new Date(timestamp - new Date(timestamp).getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+}
+function statusChangeLabel(timestamp: number | null) {
+  return timestamp ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(timestamp) : "Not recorded";
+}
 
 const colors = ["coral", "blue", "gold"] as const;
 const sourceColors = ["#ff795e", "#4b7cff", "#e6a83b", "#6ea78a", "#8f77df"];
@@ -402,6 +410,19 @@ export default function Home() {
     } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to update rating"); }
   }
 
+  async function updateStatusChangeDate(book: Book, value: string) {
+    const statusChangedAt = new Date(value).getTime();
+    if (!Number.isFinite(statusChangedAt)) return;
+    try {
+      const response = await fetch(`/api/books/${book.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ statusChangedAt }) });
+      const payload = await response.json() as { book?: Book; error?: string };
+      if (!response.ok || !payload.book) throw new Error(payload.error ?? "Unable to update status date");
+      setBooks((current) => current.map((item) => item.id === book.id ? payload.book! : item));
+      setSelectedBook((current) => current?.id === book.id ? payload.book! : current);
+      setMessage("Status change date was updated.");
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to update status date"); }
+  }
+
   async function refreshBookMetadata(book: Book) {
     setBusy(true); setMessage("Refreshing book details from Douban...");
     try {
@@ -645,7 +666,7 @@ export default function Home() {
         <div className="modal-backdrop reader-backdrop" role="dialog" aria-modal="true" aria-label="Book details" onClick={() => setSelectedBook(null)}>
           <article className="reader-modal book-reader-modal" onClick={(event) => event.stopPropagation()}>
             <div className="modal-head"><div><p className="eyebrow">YOUR LIBRARY · {selectedBook.status === "reading" ? "READING NOW" : selectedBook.status === "to_read" ? "TO BE READ" : "READ"}</p><h2>{selectedBook.title}</h2>{displayAuthor(selectedBook.author) && <p className="book-reader-author">by {displayAuthor(selectedBook.author)}</p>}</div><button onClick={() => setSelectedBook(null)} aria-label="Close">×</button></div>
-            <section className="book-reader-hero">{selectedBook.coverUrl ? <img src={bookCoverSrc(selectedBook.coverUrl)} alt={`Cover of ${selectedBook.title}`} /> : <div className="book-reader-spine">{selectedBook.title.slice(0, 1)}</div>}<div className="book-facts"><div className="book-status-control"><span>Reading status</span><select aria-label={`Reading status for ${selectedBook.title}`} value={selectedBook.status} onChange={(event) => void updateBookStatus(selectedBook, event.target.value as Book["status"])}><option value="reading">Reading now</option><option value="to_read">To be read</option><option value="read">Read</option></select></div><div className="book-status-control"><span>Your rating</span><select aria-label={`Your rating for ${selectedBook.title}`} value={selectedBook.personalRating ?? ""} onChange={(event) => void updateBookRating(selectedBook, event.target.value ? Number(event.target.value) : null)}><option value="">Not rated</option>{[1, 2, 3, 4, 5].map((rating) => <option key={rating} value={rating}>{"★".repeat(rating)} {rating}/5</option>)}</select></div>{selectedBook.interestScore !== null && <div className="book-fit-large"><strong>{selectedBook.interestScore}</strong><span>interest fit</span></div>}<dl>{selectedBook.publishedYear && <><dt>Published</dt><dd>{selectedBook.publishedYear}</dd></>}{selectedBook.isbn && <><dt>ISBN</dt><dd>{selectedBook.isbn}</dd></>}{bookTags(selectedBook).length > 0 && <><dt>Tags</dt><dd className="book-metadata-tags">{bookTags(selectedBook).map((tag) => <span key={tag}>{tag}</span>)}</dd></>}{selectedBook.subjects && <><dt>Source tags</dt><dd>{selectedBook.subjects}</dd></>}</dl></div></section>
+            <section className="book-reader-hero">{selectedBook.coverUrl ? <img src={bookCoverSrc(selectedBook.coverUrl)} alt={`Cover of ${selectedBook.title}`} /> : <div className="book-reader-spine">{selectedBook.title.slice(0, 1)}</div>}<div className="book-facts"><div className="book-status-control"><span>Reading status</span><select aria-label={`Reading status for ${selectedBook.title}`} value={selectedBook.status} onChange={(event) => void updateBookStatus(selectedBook, event.target.value as Book["status"])}><option value="reading">Reading now</option><option value="to_read">To be read</option><option value="read">Read</option></select></div><div className="book-status-control"><span>Your rating</span><select aria-label={`Your rating for ${selectedBook.title}`} value={selectedBook.personalRating ?? ""} onChange={(event) => void updateBookRating(selectedBook, event.target.value ? Number(event.target.value) : null)}><option value="">Not rated</option>{[1, 2, 3, 4, 5].map((rating) => <option key={rating} value={rating}>{"★".repeat(rating)} {rating}/5</option>)}</select></div><div className="book-status-control"><span>Last status change</span><small>{statusChangeLabel(selectedBook.statusChangedAt)}</small><input type="datetime-local" aria-label={`Last status change for ${selectedBook.title}`} value={statusChangeInputValue(selectedBook.statusChangedAt)} onChange={(event) => void updateStatusChangeDate(selectedBook, event.target.value)} /></div>{selectedBook.interestScore !== null && <div className="book-fit-large"><strong>{selectedBook.interestScore}</strong><span>interest fit</span></div>}<dl>{selectedBook.publishedYear && <><dt>Published</dt><dd>{selectedBook.publishedYear}</dd></>}{selectedBook.isbn && <><dt>ISBN</dt><dd>{selectedBook.isbn}</dd></>}{bookTags(selectedBook).length > 0 && <><dt>Tags</dt><dd className="book-metadata-tags">{bookTags(selectedBook).map((tag) => <span key={tag}>{tag}</span>)}</dd></>}{selectedBook.subjects && <><dt>Source tags</dt><dd>{selectedBook.subjects}</dd></>}</dl></div></section>
             <section className="book-detail-section"><div className="detail-heading"><div><p className="eyebrow">ABOUT THE BOOK</p></div>{selectedBook.canonicalUrl?.includes("book.douban.com") && <button className="analyze-button" disabled={busy} onClick={() => void refreshBookMetadata(selectedBook)}>Refresh from Douban</button>}</div><div className="reader-body">{selectedBook.description ? selectedBook.description.split(/\n{2,}/).map((paragraph, index) => <p key={index}>{paragraph}</p>) : <p>No description was available when this book was added. Use “Refresh from Douban” to import its latest book details.</p>}</div></section>
             <section className="book-detail-section book-fit-detail"><div className="detail-heading"><div><p className="eyebrow">PERSONAL FIT</p><h3>Why it may matter to you</h3></div><button className="analyze-button" disabled={busy} onClick={() => void analyzeBook(selectedBook)}>{selectedBook.analysis ? "Refresh analysis" : "Analyze fit"}</button></div>{selectedBook.analysis ? <OutlineSummary markdown={selectedBook.analysis} /> : <p className="detail-empty">Run an analysis to compare this book with the books and articles already in your reading history.</p>}</section>
             {bookConnections(selectedBook).length > 0 && <section className="book-detail-section"><p className="eyebrow">CONNECTED READING</p><div className="book-connection-cards">{bookConnections(selectedBook).map((connection) => { const linkedBook = connection.type === "book" ? books.find((book) => book.id === connection.id) : null; const linkedArticle = connection.type === "article" ? articles.find((article) => article.id === connection.id) : null; const item = linkedBook ?? linkedArticle; if (!item) return null; return <button key={`${connection.type}-${connection.id}`} onClick={() => connection.type === "book" ? openBook(linkedBook!) : openArticle(linkedArticle!)}><span>{connection.type === "book" ? "BOOK" : "ARTICLE"}</span><strong>{item.title}</strong><small>{connection.reason}</small></button>; })}</div></section>}

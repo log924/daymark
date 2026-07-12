@@ -37,7 +37,7 @@ async function refreshBookMetadata(book: typeof books.$inferSelect) {
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    await ensureDatabase(); const { id } = await context.params; const payload = (await request.json()) as { status?: string; personalRating?: number | null; refreshMetadata?: boolean };
+    await ensureDatabase(); const { id } = await context.params; const payload = (await request.json()) as { status?: string; statusChangedAt?: number; personalRating?: number | null; refreshMetadata?: boolean };
     const db = getDb(); const [existing] = await db.select().from(books).where(eq(books.id, id)).limit(1);
     if (!existing) return Response.json({ error: "Book not found" }, { status: 404 });
     if (payload.refreshMetadata) {
@@ -48,6 +48,11 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     if ("personalRating" in payload) {
       if (payload.personalRating !== null && (!Number.isInteger(payload.personalRating) || payload.personalRating < 1 || payload.personalRating > 5)) return Response.json({ error: "Rating must be from 1 to 5" }, { status: 400 });
       const [book] = await db.update(books).set({ personalRating: payload.personalRating, updatedAt: Date.now() }).where(eq(books.id, id)).returning();
+      return Response.json({ book });
+    }
+    if ("statusChangedAt" in payload) {
+      if (!Number.isFinite(payload.statusChangedAt) || (payload.statusChangedAt ?? 0) <= 0) return Response.json({ error: "Invalid status change date" }, { status: 400 });
+      const [book] = await db.update(books).set({ statusChangedAt: Math.round(payload.statusChangedAt!), updatedAt: Date.now() }).where(eq(books.id, id)).returning();
       return Response.json({ book });
     }
     if (!["read", "reading", "to_read"].includes(payload.status ?? "")) return Response.json({ error: "Invalid status" }, { status: 400 });
