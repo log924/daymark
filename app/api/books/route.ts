@@ -15,6 +15,18 @@ function cleanText(value: string | undefined) {
   return value?.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim() || null;
 }
 
+function normalizeAuthor(value: string | undefined) {
+  const cleaned = cleanText(value)?.replace(/^[\s:：]+/, "").replace(/\[[^\]]*\]/g, "").replace(/【[^】]*】/g, "").replace(/\s+/g, " ").trim();
+  if (!cleaned) return null;
+  const parts = cleaned.split(/\s*[\/／;；]\s*/).filter(Boolean);
+  const latinPart = parts.find((part) => /[A-Za-zÀ-ÖØ-öø-ÿ]/.test(part));
+  if (!latinPart) return parts[0] ?? null;
+  const parenthesized = latinPart.match(/[（(]([^）)]*[A-Za-zÀ-ÖØ-öø-ÿ][^）)]*)[）)]/);
+  if (parenthesized) return parenthesized[1].trim();
+  const latinName = latinPart.match(/[A-Za-zÀ-ÖØ-öø-ÿ][A-Za-zÀ-ÖØ-öø-ÿ .,'’\-]*/)?.[0]?.trim();
+  return latinName || latinPart.trim();
+}
+
 function descriptionText(value: string | undefined) {
   return value?.replace(/<br\s*\/?>/gi, "\n").replace(/<\/p>/gi, "\n\n").replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim() || null;
 }
@@ -41,7 +53,7 @@ function doubanDetails(html: string) {
   const intros = Array.from(report.matchAll(/<div\b[^>]*\bclass=["'][^"']*\bintro\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi));
   const description = descriptionText((intros[1] ?? intros[0])?.[1]);
   const subjects = Array.from(html.matchAll(/<a[^>]+class=["'][^"']*\btag\b[^"']*["'][^>]*>([^<]+)<\/a>/gi)).map((match) => cleanText(match[1])).filter(Boolean).slice(0, 12).join(", ") || null;
-  return { title, author: label("作者") ?? label("译者"), description, coverUrl, subjects, isbn: label("ISBN"), publishedYear: label("出版年") };
+  return { title, author: normalizeAuthor(label("作者") ?? label("译者") ?? undefined), description, coverUrl, subjects, isbn: label("ISBN"), publishedYear: label("出版年") };
 }
 
 async function lookup(url: string) {
