@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "../../../../db";
-import { articles, books } from "../../../../db/schema";
+import { articles, books, bookTags, tags } from "../../../../db/schema";
 import { ensureDatabase } from "../../../../lib/bootstrap";
 import { generateBookAnalysis, type AiSettings } from "../../../../lib/ai";
 import { toRouteErrorMessage } from "../../../../lib/route-errors";
@@ -22,6 +22,8 @@ function doubanDetails(html: string) {
     isbn: label("ISBN"), publishedYear: label("出版年"),
   };
 }
+function normalizeTag(name: string) { return name.trim().toLocaleLowerCase().replace(/\s+/g, " ").replace(/[，、。；：]/g, ""); }
+function savedTags(value: string | null) { try { return value ? JSON.parse(value) as string[] : []; } catch { return []; } }
 
 async function refreshBookMetadata(book: typeof books.$inferSelect) {
   if (!book.canonicalUrl) throw new Error("This book has no source link to refresh");
@@ -35,12 +37,17 @@ async function refreshBookMetadata(book: typeof books.$inferSelect) {
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    await ensureDatabase(); const { id } = await context.params; const payload = (await request.json()) as { status?: string; refreshMetadata?: boolean };
+    await ensureDatabase(); const { id } = await context.params; const payload = (await request.json()) as { status?: string; personalRating?: number | null; refreshMetadata?: boolean };
     const db = getDb(); const [existing] = await db.select().from(books).where(eq(books.id, id)).limit(1);
     if (!existing) return Response.json({ error: "Book not found" }, { status: 404 });
     if (payload.refreshMetadata) {
       const metadata = await refreshBookMetadata(existing);
       const [book] = await db.update(books).set({ ...metadata, title: metadata.title || existing.title, updatedAt: Date.now() }).where(eq(books.id, id)).returning();
+      return Response.json({ book });
+    }
+    if ("personalRating" in payload) {
+      if (payload.personalRating !== null && (!Number.isInteger(payload.personalRating) || payload.personalRating < 1 || payload.personalRating > 5)) return Response.json({ error: "Rating must be from 1 to 5" }, { status: 400 });
+      const [book] = await db.update(books).set({ personalRating: payload.personalRating, updatedAt: Date.now() }).where(eq(books.id, id)).returning();
       return Response.json({ book });
     }
     if (!["read", "reading", "to_read"].includes(payload.status ?? "")) return Response.json({ error: "Invalid status" }, { status: 400 });
@@ -56,8 +63,34 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const db = getDb(); const [book] = await db.select().from(books).where(eq(books.id, id)).limit(1);
     if (!book) return Response.json({ error: "Book not found" }, { status: 404 });
     const [historyBooks, historyArticles] = await Promise.all([db.select().from(books).limit(80), db.select().from(articles).limit(100)]);
-    const result = await generateBookAnalysis(book, { books: historyBooks.filter((item) => item.id !== id).map((item) => ({ id: item.id, title: item.title, author: item.author, status: item.status, description: item.description })), articles: historyArticles.map((item) => ({ id: item.id, title: item.title, status: item.status, description: item.content?.replace(/<[^>]*>/g, " ").slice(0, 700) ?? null })) }, settings);
-    const [updated] = await db.update(books).set({ interestScore: result.interestScore, analysis: result.analysis, connections: JSON.stringify(result.connections), updatedAt: Date.now() }).where(eq(books.id, id)).returning();
+    let existingTags = await db.select().from(tags).limit(300);
+    for (const historyBook of historyBooks) {
+      for (const savedTag of savedTags(historyBook.aiTags)) {
+        const normalizedName = normalizeTag(savedTag);
+        if (!normalizedName) continue;
+        let tag = existingTags.find((item) => item.normalizedName === normalizedName);
+        if (!tag) {
+          const [created] = await db.insert(tags).values({ id: crypto.randomUUID(), name: savedTag.trim(), normalizedName, createdAt: Date.now() }).returning();
+          tag = created; existingTags = [...existingTags, created];
+        }
+        await db.insert(bookTags).values({ bookId: historyBook.id, tagId: tag.id, createdAt: Date.now() }).onConflictDoNothing();
+      }
+    }
+    const result = await generateBookAnalysis(book, { books: historyBooks.filter((item) => item.id !== id).map((item) => ({ id: item.id, title: item.title, author: item.author, status: item.status, description: item.description, personalRating: item.personalRating, tags: item.aiTags ?? item.subjects })), articles: historyArticles.map((item) => ({ id: item.id, title: item.title, status: item.status, description: item.content?.replace(/<[^>]*>/g, " ").slice(0, 700) ?? null })), tagLibrary: existingTags.map((tag) => tag.name) }, settings);
+    const resolved = [] as Array<{ id: string; name: string; normalizedName: string }>;
+    for (const requestedTag of result.tags) {
+      const normalizedName = normalizeTag(requestedTag);
+      if (!normalizedName || resolved.some((tag) => tag.normalizedName === normalizedName)) continue;
+      let tag = existingTags.find((item) => item.normalizedName === normalizedName);
+      if (!tag) {
+        const [created] = await db.insert(tags).values({ id: crypto.randomUUID(), name: requestedTag.trim(), normalizedName, createdAt: Date.now() }).returning();
+        tag = created;
+      }
+      resolved.push(tag);
+    }
+    await db.delete(bookTags).where(eq(bookTags.bookId, id));
+    for (const tag of resolved) await db.insert(bookTags).values({ bookId: id, tagId: tag.id, createdAt: Date.now() });
+    const [updated] = await db.update(books).set({ interestScore: result.interestScore, analysis: result.analysis, aiTags: JSON.stringify(resolved.map((tag) => tag.name)), connections: JSON.stringify(result.connections), updatedAt: Date.now() }).where(eq(books.id, id)).returning();
     return Response.json({ book: updated });
   } catch (error) { return Response.json({ error: toRouteErrorMessage(error) }, { status: 500 }); }
 }
