@@ -68,7 +68,7 @@ export async function POST(_request: Request, context: Params) {
       await db.update(sources).set({ name: feed.title }).where(eq(sources.id, source.id));
     }
 
-    return Response.json({ created, skipped, found: feed.items.length });
+    return Response.json({ created, skipped, found: feed.items.length, sourceName: feed.title ?? source.name });
   } catch (error) {
     return Response.json({ error: toRouteErrorMessage(error) }, { status: 500 });
   }

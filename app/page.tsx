@@ -120,9 +120,12 @@ export default function Home() {
   const [processingInsight, setProcessingInsight] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [showCapture, setShowCapture] = useState(false);
+  const [editingSource, setEditingSource] = useState<Source | null>(null);
+  const [sourceToRemove, setSourceToRemove] = useState<Source | null>(null);
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
   const [feedUrl, setFeedUrl] = useState("");
-  const [feedName, setFeedName] = useState("");
+  const [sourceName, setSourceName] = useState("");
+  const [sourceUrl, setSourceUrl] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
   const [linkTitle, setLinkTitle] = useState("");
   const [message, setMessage] = useState("Loading your reading desk...");
@@ -225,7 +228,7 @@ export default function Home() {
       const createResponse = await fetch("/api/sources", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name: feedName, url: feedUrl, kind: "rss" }),
+        body: JSON.stringify({ url: feedUrl, kind: "rss" }),
       });
       const createPayload = await createResponse.json() as { source?: Source; error?: string };
       if (!createResponse.ok || !createPayload.source) {
@@ -233,20 +236,59 @@ export default function Home() {
       }
 
       const refreshResponse = await fetch(`/api/sources/${createPayload.source.id}/refresh`, { method: "POST" });
-      const refreshPayload = await refreshResponse.json() as { created?: number; error?: string };
+      const refreshPayload = await refreshResponse.json() as { created?: number; sourceName?: string; error?: string };
       if (!refreshResponse.ok) {
         throw new Error(refreshPayload.error ?? "Source added, but refresh failed");
       }
 
       setFeedUrl("");
-      setFeedName("");
       setShowCapture(false);
-      await loadData(`Added ${createPayload.source.name}; imported ${refreshPayload.created ?? 0} new articles.`);
+      await loadData(`Added ${refreshPayload.sourceName ?? createPayload.source.name}; imported ${refreshPayload.created ?? 0} new articles.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to add source");
     } finally {
       setBusy(false);
     }
+  }
+
+  function openSourceEditor(source: Source) {
+    setEditingSource(source);
+    setSourceName(source.name);
+    setSourceUrl(source.url);
+  }
+
+  async function saveSource(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editingSource || !sourceName.trim() || !sourceUrl.trim()) return;
+    setBusy(true);
+    try {
+      const response = await fetch(`/api/sources/${editingSource.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: sourceName, url: sourceUrl }),
+      });
+      const payload = await response.json() as { source?: Source; error?: string };
+      if (!response.ok || !payload.source) throw new Error(payload.error ?? "Unable to update source");
+      setEditingSource(null);
+      await loadData(`Updated ${payload.source.name}.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to update source");
+    } finally { setBusy(false); }
+  }
+
+  async function removeSource() {
+    if (!sourceToRemove) return;
+    setBusy(true);
+    try {
+      const response = await fetch(`/api/sources/${sourceToRemove.id}`, { method: "DELETE" });
+      const payload = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "Unable to remove source");
+      const removedName = sourceToRemove.name;
+      setSourceToRemove(null);
+      await loadData(`Removed ${removedName}.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Unable to remove source");
+    } finally { setBusy(false); }
   }
 
   async function saveLink(event: FormEvent<HTMLFormElement>) {
@@ -431,7 +473,7 @@ export default function Home() {
         {active === "Brief" && !dailyBrief && <div className="empty-state">Click <strong>Refresh feeds</strong> to fetch every RSS source and create your first Simplified Chinese daily brief.</div>}
         {active !== "Settings" && active !== "Brief" && !visibleArticles.length && <div className="empty-state">Use Add source to connect an RSS feed, or save a page link, and Daymark will start filling this desk.</div>}
 
-        {active === "Sources" && <section className="sources-panel"><div className="section-heading"><div><p className="eyebrow">FOLLOWING</p><h2>From your sources</h2></div><button className="text-button" onClick={() => setShowCapture(true)}>Add RSS <span>→</span></button></div><div className="source-list">{sources.map((source, index) => <div key={source.id} className="source-row"><span className="source-logo" style={{background: sourceColors[index % sourceColors.length]}}>{source.name.charAt(0).toUpperCase()}</span><strong>{source.name}</strong><span>{source.articleCount} articles</span></div>)}</div></section>}
+        {active === "Sources" && <section className="sources-panel"><div className="section-heading"><div><p className="eyebrow">FOLLOWING</p><h2>From your sources</h2></div><button className="text-button" onClick={() => setShowCapture(true)}>Add RSS <span>→</span></button></div><div className="source-list">{sources.map((source, index) => <div key={source.id} className="source-row"><span className="source-logo" style={{background: sourceColors[index % sourceColors.length]}}>{source.name.charAt(0).toUpperCase()}</span><div className="source-details"><strong>{source.name}</strong><small>{source.url}</small></div><span>{source.articleCount} articles</span><div className="source-controls"><button onClick={() => openSourceEditor(source)}>Edit</button><button className="remove-source" onClick={() => setSourceToRemove(source)}>Remove</button></div></div>)}</div></section>}
       </section>
 
       {showCapture && (
@@ -443,10 +485,7 @@ export default function Home() {
                 <span>RSS feed</span>
                 <input value={feedUrl} onChange={(event) => setFeedUrl(event.target.value)} placeholder="https://example.com/feed.xml" autoFocus />
               </label>
-              <label>
-                <span>Name</span>
-                <input value={feedName} onChange={(event) => setFeedName(event.target.value)} placeholder="Optional" />
-              </label>
+              <p className="feed-help">We’ll read the RSS feed and use its title as the source name.</p>
               <button disabled={busy || !feedUrl.trim()}>Add + refresh</button>
             </form>
             <form onSubmit={saveLink}>
@@ -463,6 +502,10 @@ export default function Home() {
           </div>
         </div>
       )}
+
+      {editingSource && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Edit source"><div className="capture-modal source-editor"><div className="modal-head"><div><p className="eyebrow">EDIT SOURCE</p><h2>{editingSource.name}</h2></div><button onClick={() => setEditingSource(null)} aria-label="Close">×</button></div><form onSubmit={saveSource}><label><span>Source name</span><input autoFocus value={sourceName} onChange={(event) => setSourceName(event.target.value)} required /></label><label><span>RSS feed</span><input type="url" value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} required /></label><button disabled={busy}>Save changes</button></form></div></div>}
+
+      {sourceToRemove && <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Remove source"><div className="capture-modal confirm-modal"><p className="eyebrow">REMOVE SOURCE</p><h2>Remove {sourceToRemove.name}?</h2><p>Its imported articles will remain in your reading list.</p><div className="dialog-actions"><button className="secondary-button" onClick={() => setSourceToRemove(null)} disabled={busy}>Keep source</button><button className="danger-button" onClick={() => void removeSource()} disabled={busy}>Remove source</button></div></div></div>}
 
       {selectedArticle && (
         <div className="modal-backdrop reader-backdrop" role="dialog" aria-modal="true" aria-label="Article reader" onClick={() => setSelectedArticle(null)}>
