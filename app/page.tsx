@@ -40,6 +40,12 @@ type DailyBrief = {
   articleIds: string;
   createdAt: number;
 };
+type Book = {
+  id: string; title: string; author: string | null; canonicalUrl: string | null; coverUrl: string | null;
+  description: string | null; subjects: string | null; isbn: string | null; publishedYear: string | null;
+  status: "read" | "reading" | "to_read"; interestScore: number | null; analysis: string | null; connections: string | null;
+  createdAt: number; updatedAt: number;
+};
 
 const colors = ["coral", "blue", "gold"] as const;
 const sourceColors = ["#ff795e", "#4b7cff", "#e6a83b", "#6ea78a", "#8f77df"];
@@ -118,6 +124,7 @@ export default function Home() {
   const [saved, setSaved] = useState<string[]>([]);
   const [insights, setInsights] = useState<Record<string, Insight | null>>({});
   const [dailyBrief, setDailyBrief] = useState<DailyBrief | null>(null);
+  const [books, setBooks] = useState<Book[]>([]);
   const [processingInsight, setProcessingInsight] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [showCapture, setShowCapture] = useState(false);
@@ -130,6 +137,9 @@ export default function Home() {
   const [sourceUrl, setSourceUrl] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
   const [linkTitle, setLinkTitle] = useState("");
+  const [bookTitle, setBookTitle] = useState("");
+  const [bookUrl, setBookUrl] = useState("");
+  const [bookStatus, setBookStatus] = useState<Book["status"]>("to_read");
   const [message, setMessage] = useState("Loading your reading desk...");
   const [busy, setBusy] = useState(false);
   const [deepSeekApiKey, setDeepSeekApiKey] = useState("");
@@ -159,15 +169,17 @@ export default function Home() {
   }, [dailyBrief]);
 
   async function loadData(nextMessage = "") {
-    const [articleResponse, sourceResponse, briefResponse] = await Promise.all([
+    const [articleResponse, sourceResponse, briefResponse, bookResponse] = await Promise.all([
       fetch("/api/articles"),
       fetch("/api/sources"),
       fetch("/api/brief"),
+      fetch("/api/books"),
     ]);
 
     const articlePayload = await articleResponse.json() as { articles?: Article[]; error?: string };
     const sourcePayload = await sourceResponse.json() as { sources?: Source[]; error?: string };
     const briefPayload = await briefResponse.json() as { brief?: DailyBrief | null };
+    const bookPayload = await bookResponse.json() as { books?: Book[]; error?: string };
 
     if (!articleResponse.ok || !sourceResponse.ok) {
       throw new Error(articlePayload.error ?? sourcePayload.error ?? "Unable to load reading data");
@@ -176,6 +188,7 @@ export default function Home() {
     setArticles(articlePayload.articles ?? []);
     setSources(sourcePayload.sources ?? []);
     setDailyBrief(briefPayload.brief ?? null);
+    setBooks(bookPayload.books ?? []);
     setMessage(nextMessage || "Ready");
   }
 
@@ -325,6 +338,40 @@ export default function Home() {
     }
   }
 
+  async function addBook(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!bookTitle.trim() && !bookUrl.trim()) return;
+    setBusy(true); setMessage("Adding book to your shelf...");
+    try {
+      const response = await fetch("/api/books", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title: bookTitle, url: bookUrl, status: bookStatus }) });
+      const payload = await response.json() as { book?: Book; created?: boolean; error?: string };
+      if (!response.ok || !payload.book) throw new Error(payload.error ?? "Unable to add book");
+      setBookTitle(""); setBookUrl(""); setShowCapture(false);
+      await loadData(payload.created ? `Added ${payload.book.title} to your shelf.` : "That book is already on your shelf.");
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to add book"); } finally { setBusy(false); }
+  }
+
+  async function updateBookStatus(book: Book, status: Book["status"]) {
+    const previous = books; setBooks((current) => current.map((item) => item.id === book.id ? { ...item, status } : item));
+    try {
+      const response = await fetch(`/api/books/${book.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ status }) });
+      const payload = await response.json() as { book?: Book; error?: string };
+      if (!response.ok || !payload.book) throw new Error(payload.error ?? "Unable to update book");
+      setBooks((current) => current.map((item) => item.id === book.id ? payload.book! : item));
+    } catch (error) { setBooks(previous); setMessage(error instanceof Error ? error.message : "Unable to update book"); }
+  }
+
+  async function analyzeBook(book: Book) {
+    if (!deepSeekApiKey.trim()) { setActive("Settings"); setMessage("Add your DeepSeek API key in Settings to analyze book fit."); return; }
+    setBusy(true); setMessage("Comparing this book with your reading history...");
+    try {
+      const response = await fetch(`/api/books/${book.id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ apiKey: deepSeekApiKey, model: deepSeekModel }) });
+      const payload = await response.json() as { book?: Book; error?: string };
+      if (!response.ok || !payload.book) throw new Error(payload.error ?? "Unable to analyze book");
+      setBooks((current) => current.map((item) => item.id === book.id ? payload.book! : item)); setMessage("Book fit analysis saved.");
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to analyze book"); } finally { setBusy(false); }
+  }
+
   async function refreshAllFeeds() {
     if (!deepSeekApiKey.trim()) {
       setActive("Settings");
@@ -410,9 +457,9 @@ export default function Home() {
       <aside className="sidebar">
         <a className="brand" href="#top" aria-label="Daymark home"><span>✦</span> daymark</a>
         <nav aria-label="Main navigation">
-          {["Brief", "Latest", "Sources", "Saved", "Settings"].map((name) => (
+          {["Brief", "Latest", "Sources", "Saved", "Books", "Settings"].map((name) => (
             <div key={name} className="nav-group"><button className={active === name ? "nav-item active" : "nav-item"} onClick={() => { setActive(name); if (name === "Latest") setSelectedLatestSourceId(null); }}>
-              <span>{name === "Brief" ? "◒" : name === "Latest" ? "◷" : name === "Sources" ? "◉" : name === "Saved" ? "♡" : "⚙"}</span>{name}
+              <span>{name === "Brief" ? "◒" : name === "Latest" ? "◷" : name === "Sources" ? "◉" : name === "Saved" ? "♡" : name === "Books" ? "▤" : "⚙"}</span>{name}
               {name === "Latest" && <b>{unreadCount}</b>}
             </button>{name === "Sources" && sources.length > 0 && <div className="source-nav-list">{sources.map((source, index) => { const unread = articles.filter((article) => article.sourceId === source.id && !article.readAt).length; return <button key={source.id} className={active === "Latest" && selectedLatestSource?.id === source.id ? "source-nav-item active" : "source-nav-item"} onClick={() => { setActive("Latest"); setSelectedLatestSourceId(source.id); setShowAll(false); }}><span className="source-logo" style={{ background: sourceColors[index % sourceColors.length] }}>{source.name.charAt(0).toUpperCase()}</span><span>{source.name}</span><b>{unread}</b></button>; })}</div>}</div>
           ))}
@@ -424,7 +471,7 @@ export default function Home() {
       <section className="content" id="top">
         <header className="topbar">
           <div className="crumb"><span className="sun">☀</span><span>{new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</span><em>•</em><span>{message}</span></div>
-          <div className="top-actions"><button className="refresh-button" onClick={() => void refreshAllFeeds()} disabled={busy}>{busy ? "Refreshing…" : "↻ Refresh feeds"}</button><button className="add-button" onClick={() => setShowCapture(true)}>+ Add source</button></div>
+          <div className="top-actions"><button className="refresh-button" onClick={() => void refreshAllFeeds()} disabled={busy}>{busy ? "Refreshing…" : "↻ Refresh feeds"}</button><button className="add-button" onClick={() => setShowCapture(true)}>+ Add {active === "Books" ? "book" : "source"}</button></div>
         </header>
 
         <div className="brief-head">
@@ -460,11 +507,17 @@ export default function Home() {
           </section>
         )}
 
+        {active === "Books" && <section className="books-panel">
+          <div className="section-heading"><div><p className="eyebrow">PERSONAL LIBRARY</p><h2>Your reading shelf</h2></div><button className="text-button" onClick={() => setShowCapture(true)}>Add a book <span>→</span></button></div>
+          <p className="books-intro">Keep what you’ve read, are reading, and want to read in one place. Add a title or paste a Goodreads/Douban page; then use your reading history to assess the fit.</p>
+          <div className="book-columns">{(["reading", "to_read", "read"] as const).map((status) => <section className="book-column" key={status}><div className="book-column-head"><span>{status === "reading" ? "Reading now" : status === "to_read" ? "To be read" : "Read"}</span><b>{books.filter((book) => book.status === status).length}</b></div>{books.filter((book) => book.status === status).map((book) => { let connections: Array<{ type: "book" | "article"; id: string; reason: string }> = []; try { connections = book.connections ? JSON.parse(book.connections) : []; } catch {} return <article className="book-card" key={book.id}>{book.coverUrl ? <img src={book.coverUrl} alt="" /> : <div className="book-spine">{book.title.slice(0, 1)}</div>}<div className="book-card-main"><p className="eyebrow">{book.author ?? "AUTHOR UNKNOWN"}</p><h3>{book.title}</h3>{book.description && <p className="book-description">{book.description}</p>}{book.interestScore !== null && <div className="fit-score"><strong>{book.interestScore}</strong><span>interest fit</span></div>}<select aria-label={`Reading status for ${book.title}`} value={book.status} onChange={(event) => void updateBookStatus(book, event.target.value as Book["status"])}><option value="reading">Reading now</option><option value="to_read">To be read</option><option value="read">Read</option></select><button className="analyze-button" disabled={busy} onClick={() => void analyzeBook(book)}>{book.analysis ? "Refresh fit analysis" : "Analyze fit"}</button>{book.analysis && <div className="book-analysis"><OutlineSummary markdown={book.analysis} />{connections.length > 0 && <div className="connection-list"><strong>Links to your history</strong>{connections.map((connection) => <span key={`${connection.type}-${connection.id}`}>{connection.type === "book" ? "Book" : "Article"}: {connection.reason}</span>)}</div>}</div>}{book.canonicalUrl && <a className="book-source" href={book.canonicalUrl} target="_blank" rel="noreferrer">Open source ↗</a>}</div></article>})}{!books.some((book) => book.status === status) && <div className="empty-books">Nothing here yet.</div>}</section>)}</div>
+        </section>}
+
         {active === "Brief" && dailyBrief && <section className="daily-brief"><div className="section-heading"><div><p className="eyebrow">DEEPSEEK DAILY BRIEF · {new Date(dailyBrief.createdAt).toLocaleString()}</p><h2>What you need to know</h2></div><button className="text-button" onClick={() => void refreshAllFeeds()} disabled={busy}>Refresh all feeds <span>↻</span></button></div><OutlineSummary markdown={dailyBrief.summary} /><div className="brief-recommendations"><p className="eyebrow">RECOMMENDED READING</p>{briefRecommendations.map((recommendation, index) => <div className="brief-recommendation" key={index}><p>{recommendation.text}</p><div>{recommendation.articleIds.map((id) => { const article = articles.find((item) => item.id === id); return article ? <a key={id} href={`#article-${id}`} onClick={(event) => { event.preventDefault(); openArticle(article); }}>Read: {article.title} <span>→</span></a> : null; })}</div></div>)}</div></section>}
 
-        {active !== "Settings" && active !== "Brief" && <section className="section-heading"><div><p className="eyebrow">{active === "Saved" ? "SAVED" : active === "Latest" ? "LATEST UNREAD" : "BY SOURCE"}</p><h2>{active === "Saved" ? "For later" : active === "Latest" ? selectedLatestSource ? selectedLatestSource.name : "All unread articles" : "All incoming pieces"}</h2></div><button className="text-button" onClick={() => setShowAll(!showAll)}>{showAll ? "Show less" : "See first 6"} <span>→</span></button></section>}
+        {active !== "Settings" && active !== "Brief" && active !== "Books" && <section className="section-heading"><div><p className="eyebrow">{active === "Saved" ? "SAVED" : active === "Latest" ? "LATEST UNREAD" : "BY SOURCE"}</p><h2>{active === "Saved" ? "For later" : active === "Latest" ? selectedLatestSource ? selectedLatestSource.name : "All unread articles" : "All incoming pieces"}</h2></div><button className="text-button" onClick={() => setShowAll(!showAll)}>{showAll ? "Show less" : "See first 6"} <span>→</span></button></section>}
 
-        {active !== "Settings" && active !== "Brief" && <section className="story-grid">
+        {active !== "Settings" && active !== "Brief" && active !== "Books" && <section className="story-grid">
           {visibleArticles.map((article, index) => {
             const source = article.sourceId ? sourceById.get(article.sourceId) : null;
             return (
@@ -477,7 +530,7 @@ export default function Home() {
         </section>}
 
         {active === "Brief" && !dailyBrief && <div className="empty-state">Click <strong>Refresh feeds</strong> to fetch every RSS source and create your first Simplified Chinese daily brief.</div>}
-        {active !== "Settings" && active !== "Brief" && !visibleArticles.length && <div className="empty-state">Use Add source to connect an RSS feed, or save a page link, and Daymark will start filling this desk.</div>}
+        {active !== "Settings" && active !== "Brief" && active !== "Books" && !visibleArticles.length && <div className="empty-state">Use Add source to connect an RSS feed, or save a page link, and Daymark will start filling this desk.</div>}
 
         {active === "Sources" && <section className="sources-panel"><div className="section-heading"><div><p className="eyebrow">FOLLOWING</p><h2>From your sources</h2></div><button className="text-button" onClick={() => setShowCapture(true)}>Add RSS <span>→</span></button></div><div className="source-list">{sources.map((source, index) => <div key={source.id} className="source-row"><span className="source-logo" style={{background: sourceColors[index % sourceColors.length]}}>{source.name.charAt(0).toUpperCase()}</span><div className="source-details"><strong>{source.name}</strong><small>{source.url}</small></div><span>{source.articleCount} articles</span><div className="source-controls"><button onClick={() => openSourceEditor(source)}>Edit</button><button className="remove-source" onClick={() => setSourceToRemove(source)}>Remove</button></div></div>)}</div></section>}
       </section>
@@ -486,15 +539,15 @@ export default function Home() {
         <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="Add source">
           <div className="capture-modal">
             <div className="modal-head"><div><p className="eyebrow">ADD SOURCE</p><h2>Bring something into Daymark</h2></div><button onClick={() => setShowCapture(false)} aria-label="Close">×</button></div>
-            <form onSubmit={addFeed}>
+            {active !== "Books" && <form onSubmit={addFeed}>
               <label>
                 <span>RSS feed</span>
                 <input value={feedUrl} onChange={(event) => setFeedUrl(event.target.value)} placeholder="https://example.com/feed.xml" autoFocus />
               </label>
               <p className="feed-help">We’ll read the RSS feed and use its title as the source name.</p>
               <button disabled={busy || !feedUrl.trim()}>Add + refresh</button>
-            </form>
-            <form onSubmit={saveLink}>
+            </form>}
+            {active !== "Books" && <form onSubmit={saveLink}>
               <label>
                 <span>Page title</span>
                 <input value={linkTitle} onChange={(event) => setLinkTitle(event.target.value)} placeholder="Article title" />
@@ -504,7 +557,8 @@ export default function Home() {
                 <input value={linkUrl} onChange={(event) => setLinkUrl(event.target.value)} placeholder="https://..." />
               </label>
               <button disabled={busy || !linkTitle.trim() || !linkUrl.trim()}>Save link</button>
-            </form>
+            </form>}
+            {active === "Books" && <form className="book-add-form" onSubmit={addBook}><label><span>Book title</span><input value={bookTitle} onChange={(event) => setBookTitle(event.target.value)} placeholder="Title (optional if you paste a link)" autoFocus /></label><label><span>Goodreads or Douban link</span><input value={bookUrl} onChange={(event) => setBookUrl(event.target.value)} placeholder="https://..." /></label><label><span>Shelf</span><select value={bookStatus} onChange={(event) => setBookStatus(event.target.value as Book["status"])}><option value="to_read">To be read</option><option value="reading">Reading now</option><option value="read">Read</option></select></label><button disabled={busy || (!bookTitle.trim() && !bookUrl.trim())}>Add to shelf</button></form>}
           </div>
         </div>
       )}

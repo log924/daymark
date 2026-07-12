@@ -16,3 +16,20 @@ export const dailyBriefs = sqliteTable("daily_briefs", {
   articleIds: text("article_ids").notNull(),
   createdAt: integer("created_at").notNull(),
 });
+export const books = sqliteTable("books", {
+  id: text("id").primaryKey(),
+  title: text("title").notNull(),
+  author: text("author"),
+  canonicalUrl: text("canonical_url"),
+  coverUrl: text("cover_url"),
+  description: text("description"),
+  subjects: text("subjects"),
+  isbn: text("isbn"),
+  publishedYear: text("published_year"),
+  status: text("status").notNull().default("to_read"),
+  interestScore: integer("interest_score"),
+  analysis: text("analysis"),
+  connections: text("connections"),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});

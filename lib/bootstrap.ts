@@ -21,8 +21,12 @@ export async function ensureDatabase() {
     d1.prepare(
       "CREATE TABLE IF NOT EXISTS daily_briefs (id text PRIMARY KEY NOT NULL, summary text NOT NULL, recommendations text NOT NULL, article_ids text NOT NULL, created_at integer NOT NULL)",
     ),
+    d1.prepare(
+      "CREATE TABLE IF NOT EXISTS books (id text PRIMARY KEY NOT NULL, title text NOT NULL, author text, canonical_url text, cover_url text, description text, subjects text, isbn text, published_year text, status text DEFAULT 'to_read' NOT NULL, interest_score integer, analysis text, connections text, created_at integer NOT NULL, updated_at integer NOT NULL)",
+    ),
     d1.prepare("CREATE INDEX IF NOT EXISTS articles_source_idx ON articles(source_id)"),
     d1.prepare("CREATE INDEX IF NOT EXISTS articles_published_idx ON articles(published_at)"),
+    d1.prepare("CREATE INDEX IF NOT EXISTS books_status_idx ON books(status)"),
   ]);
 
   try {
