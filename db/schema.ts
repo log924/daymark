@@ -1,4 +1,4 @@
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
 export const sources = sqliteTable("sources", {
   id: text("id").primaryKey(), name: text("name").notNull(), url: text("url").notNull(), kind: text("kind").notNull(), createdAt: integer("created_at").notNull(),
@@ -27,9 +27,23 @@ export const books = sqliteTable("books", {
   isbn: text("isbn"),
   publishedYear: text("published_year"),
   status: text("status").notNull().default("to_read"),
+  statusChangedAt: integer("status_changed_at"),
+  personalRating: integer("personal_rating"),
   interestScore: integer("interest_score"),
   analysis: text("analysis"),
+  aiTags: text("ai_tags"),
   connections: text("connections"),
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
 });
+export const tags = sqliteTable("tags", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  normalizedName: text("normalized_name").notNull().unique(),
+  createdAt: integer("created_at").notNull(),
+});
+export const bookTags = sqliteTable("book_tags", {
+  bookId: text("book_id").notNull().references(() => books.id),
+  tagId: text("tag_id").notNull().references(() => tags.id),
+  createdAt: integer("created_at").notNull(),
+}, (table) => [primaryKey({ columns: [table.bookId, table.tagId] })]);
