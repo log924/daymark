@@ -11,14 +11,42 @@ function meta(html: string, key: string) {
   return match?.[1]?.replace(/&amp;/g, "&").trim() ?? null;
 }
 
+function cleanText(value: string | undefined) {
+  return value?.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim() || null;
+}
+
+function doubanHeaders() {
+  return {
+    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124 Safari/537.36",
+    accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    referer: "https://book.douban.com/",
+  };
+}
+
+function isDoubanUrl(url: URL) {
+  return url.hostname === "book.douban.com" && /^\/subject\/\d+\/?$/.test(url.pathname);
+}
+
+function doubanDetails(html: string) {
+  const info = html.match(/<div id=["']info["'][^>]*>([\s\S]*?)<\/div>/i)?.[1] ?? "";
+  const label = (name: string) => cleanText(info.match(new RegExp(`${name}[^<]*<\\/span>\\s*([^<]*(?:<a[^>]*>[^<]*<\\/a>[^<]*)*)`, "i"))?.[1]);
+  const title = cleanText(html.match(/<span[^>]+property=["']v:itemreviewed["'][^>]*>([\s\S]*?)<\/span>/i)?.[1]);
+  const coverUrl = html.match(/<a[^>]+class=["'][^"']*\bnbg\b[^"']*["'][^>]+href=["']([^"']+)["']/i)?.[1] ?? null;
+  const description = cleanText(html.match(/<div id=["']link-report["'][\s\S]*?<div[^>]+class=["'][^"']*intro[^"']*["'][^>]*>([\s\S]*?)<\/div>\s*<\/div>/i)?.[1]);
+  const subjects = Array.from(html.matchAll(/<a[^>]+class=["'][^"']*\btag\b[^"']*["'][^>]*>([^<]+)<\/a>/gi)).map((match) => cleanText(match[1])).filter(Boolean).slice(0, 12).join(", ") || null;
+  return { title, author: label("作者") ?? label("译者"), description, coverUrl, subjects, isbn: label("ISBN"), publishedYear: label("出版年") };
+}
+
 async function lookup(url: string) {
-  const response = await fetch(url, { headers: { "user-agent": "Mozilla/5.0 (compatible; Daymark/1.0)" } });
+  const parsed = new URL(url);
+  const response = await fetch(url, { headers: isDoubanUrl(parsed) ? doubanHeaders() : { "user-agent": "Mozilla/5.0 (compatible; Daymark/1.0)" } });
   if (!response.ok) throw new Error(`Could not read the book page (${response.status})`);
   const html = await response.text();
+  if (isDoubanUrl(parsed)) return doubanDetails(html);
   const title = meta(html, "og:title") ?? html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]?.trim() ?? null;
   const description = meta(html, "og:description") ?? meta(html, "description");
   const author = meta(html, "books:author") ?? null;
-  return { title, description, author, coverUrl: meta(html, "og:image") };
+  return { title, description, author, coverUrl: meta(html, "og:image"), subjects: null, isbn: null, publishedYear: null };
 }
 
 export async function GET() {
@@ -49,7 +77,7 @@ export async function POST(request: Request) {
       if (existing[0]) return Response.json({ book: existing[0], created: false });
     }
     const now = Date.now();
-    const [book] = await db.insert(books).values({ id: crypto.randomUUID(), title, canonicalUrl, author: details?.author, description: details?.description, coverUrl: details?.coverUrl, status: ["read", "reading", "to_read"].includes(payload.status ?? "") ? payload.status! : "to_read", createdAt: now, updatedAt: now }).returning();
+    const [book] = await db.insert(books).values({ id: crypto.randomUUID(), title, canonicalUrl, author: details?.author, description: details?.description, coverUrl: details?.coverUrl, subjects: details?.subjects, isbn: details?.isbn, publishedYear: details?.publishedYear, status: ["read", "reading", "to_read"].includes(payload.status ?? "") ? payload.status! : "to_read", createdAt: now, updatedAt: now }).returning();
     return Response.json({ book, created: true }, { status: 201 });
   } catch (error) { return Response.json({ error: toRouteErrorMessage(error) }, { status: 500 }); }
 }
