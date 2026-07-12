@@ -389,6 +389,9 @@ export default function Home() {
       if (!response.ok || !payload.book) throw new Error(payload.error ?? "Unable to add book");
       setBookTitle(""); setBookUrl(""); setShowCapture(false);
       await loadData(payload.created ? `Added ${payload.book.title} to your shelf.` : "That book is already on your shelf.");
+      if (payload.created && deepSeekApiKey.trim()) {
+        await analyzeBook(payload.book, { progressMessage: "Analyzing your new book against your reading history...", successMessage: `Added ${payload.book.title} and saved its fit analysis.` });
+      }
     } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to add book"); } finally { setBusy(false); }
   }
 
@@ -439,14 +442,14 @@ export default function Home() {
     } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to refresh metadata"); } finally { setBusy(false); }
   }
 
-  async function analyzeBook(book: Book) {
+  async function analyzeBook(book: Book, options?: { progressMessage?: string; successMessage?: string }) {
     if (!deepSeekApiKey.trim()) { setActive("Settings"); setMessage("Add your DeepSeek API key in Settings to analyze book fit."); return; }
-    setBusy(true); setMessage("Comparing this book with your reading history...");
+    setBusy(true); setMessage(options?.progressMessage ?? "Comparing this book with your reading history...");
     try {
       const response = await fetch(`/api/books/${book.id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ apiKey: deepSeekApiKey, model: deepSeekModel }) });
       const payload = await response.json() as { book?: Book; error?: string };
       if (!response.ok || !payload.book) throw new Error(payload.error ?? "Unable to analyze book");
-      setBooks((current) => current.map((item) => item.id === book.id ? payload.book! : item)); setSelectedBook((current) => current?.id === book.id ? payload.book! : current); setMessage("Book fit analysis saved.");
+      setBooks((current) => current.map((item) => item.id === book.id ? payload.book! : item)); setSelectedBook((current) => current?.id === book.id ? payload.book! : current); setMessage(options?.successMessage ?? "Book fit analysis saved.");
     } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to analyze book"); } finally { setBusy(false); }
   }
 
