@@ -1,0 +1,55 @@
+import { desc, eq } from "drizzle-orm";
+import { getDb } from "../../../db";
+import { books } from "../../../db/schema";
+import { ensureDatabase } from "../../../lib/bootstrap";
+import { toRouteErrorMessage } from "../../../lib/route-errors";
+
+function meta(html: string, key: string) {
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = html.match(new RegExp(`<meta[^>]+(?:property|name)=["']${escaped}["'][^>]+content=["']([^"']+)["']`, "i"))
+    ?? html.match(new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${escaped}["']`, "i"));
+  return match?.[1]?.replace(/&amp;/g, "&").trim() ?? null;
+}
+
+async function lookup(url: string) {
+  const response = await fetch(url, { headers: { "user-agent": "Mozilla/5.0 (compatible; Daymark/1.0)" } });
+  if (!response.ok) throw new Error(`Could not read the book page (${response.status})`);
+  const html = await response.text();
+  const title = meta(html, "og:title") ?? html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1]?.trim() ?? null;
+  const description = meta(html, "og:description") ?? meta(html, "description");
+  const author = meta(html, "books:author") ?? null;
+  return { title, description, author, coverUrl: meta(html, "og:image") };
+}
+
+export async function GET() {
+  try {
+    await ensureDatabase();
+    const rows = await getDb().select().from(books).orderBy(desc(books.updatedAt));
+    return Response.json({ books: rows });
+  } catch (error) { return Response.json({ error: toRouteErrorMessage(error) }, { status: 500 }); }
+}
+
+export async function POST(request: Request) {
+  try {
+    await ensureDatabase();
+    const payload = (await request.json()) as { title?: string; url?: string; status?: string };
+    let title = payload.title?.trim() ?? "";
+    const rawUrl = payload.url?.trim() ?? "";
+    let canonicalUrl: string | null = null;
+    let details: Awaited<ReturnType<typeof lookup>> | null = null;
+    if (rawUrl) {
+      try { const parsed = new URL(rawUrl); parsed.hash = ""; canonicalUrl = parsed.toString(); } catch { return Response.json({ error: "link must be a valid URL" }, { status: 400 }); }
+      try { details = await lookup(canonicalUrl); } catch (error) { if (!title) throw error; }
+    }
+    title ||= details?.title ?? "";
+    if (!title) return Response.json({ error: "Enter a book title or a Goodreads/Douban link" }, { status: 400 });
+    const db = getDb();
+    if (canonicalUrl) {
+      const existing = await db.select().from(books).where(eq(books.canonicalUrl, canonicalUrl)).limit(1);
+      if (existing[0]) return Response.json({ book: existing[0], created: false });
+    }
+    const now = Date.now();
+    const [book] = await db.insert(books).values({ id: crypto.randomUUID(), title, canonicalUrl, author: details?.author, description: details?.description, coverUrl: details?.coverUrl, status: ["read", "reading", "to_read"].includes(payload.status ?? "") ? payload.status! : "to_read", createdAt: now, updatedAt: now }).returning();
+    return Response.json({ book, created: true }, { status: 201 });
+  } catch (error) { return Response.json({ error: toRouteErrorMessage(error) }, { status: 500 }); }
+}
