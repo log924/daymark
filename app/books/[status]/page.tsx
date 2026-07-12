@@ -65,26 +65,46 @@ export default function BookStatusPage() {
   }
 
   return (
-    <main className="book-status-page">
-      <Link className="back-to-shelf" href="/#top">← Back to your reading shelf</Link>
-      <header className="book-status-heading">
-        <p className="eyebrow">{details.eyebrow}</p>
-        <h1>{details.label}</h1>
-        <p>{loading ? "Loading your books…" : `${matchingBooks.length} ${matchingBooks.length === 1 ? "book" : "books"} on this shelf`}</p>
-      </header>
+    <div className="app-shell">
+      <aside className="sidebar">
+        <Link className="brand" href="/" aria-label="Daymark home"><span>✦</span> daymark</Link>
+        <nav aria-label="Main navigation">
+          <Link className="nav-item" href="/"><span>◒</span>Brief</Link>
+          <Link className="nav-item" href="/"><span>◷</span>Latest</Link>
+          <Link className="nav-item" href="/"><span>◉</span>Sources</Link>
+          <Link className="nav-item" href="/"><span>♡</span>Saved</Link>
+          <Link className="nav-item" href="/"><span>✓</span>Read</Link>
+          <Link className="nav-item active" href="/"><span>▤</span>Books</Link>
+          <Link className="nav-item" href="/"><span>⚙</span>Settings</Link>
+        </nav>
+        <div className="sidebar-spacer" />
+        <div className="profile"><div className="avatar">Y</div><div><strong>Your reading desk</strong><small>Personal library</small></div></div>
+      </aside>
 
-      {error && <p className="book-status-message">{error}</p>}
-      {!loading && !error && <section className="book-status-list" aria-label={`${details.label} books`}>
-        {matchingBooks.map((book) => <article className="book-status-card" key={book.id}>
-          {book.coverUrl ? <img src={bookCoverSrc(book.coverUrl)} alt="" /> : <div className="book-status-spine" aria-hidden="true">{book.title.slice(0, 1)}</div>}
-          <div>
-            <p className="eyebrow">{displayAuthor(book.author)}</p>
-            <h2>{book.canonicalUrl ? <a href={book.canonicalUrl} target="_blank" rel="noreferrer">{book.title}</a> : book.title}</h2>
-            {book.description && <p className="book-status-description">{book.description}</p>}
-          </div>
-        </article>)}
-        {!matchingBooks.length && <p className="empty-books">Nothing here yet.</p>}
-      </section>}
-    </main>
+      <section className="content" id="top">
+        <header className="topbar"><div className="crumb"><span className="sun">☀</span><span>{new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</span><em>•</em><span>Your reading shelf</span></div></header>
+        <main className="book-status-page">
+          <Link className="back-to-shelf" href="/">← Back to your reading shelf</Link>
+          <header className="book-status-heading">
+            <p className="eyebrow">{details.eyebrow}</p>
+            <h1>{details.label}</h1>
+            <p>{loading ? "Loading your books…" : `${matchingBooks.length} ${matchingBooks.length === 1 ? "book" : "books"} on this shelf`}</p>
+          </header>
+
+          {error && <p className="book-status-message">{error}</p>}
+          {!loading && !error && <section className="book-status-list" aria-label={`${details.label} books`}>
+            {matchingBooks.map((book) => <article className="book-status-card" key={book.id}>
+              {book.coverUrl ? <img src={bookCoverSrc(book.coverUrl)} alt="" /> : <div className="book-status-spine" aria-hidden="true">{book.title.slice(0, 1)}</div>}
+              <div>
+                <p className="eyebrow">{displayAuthor(book.author)}</p>
+                <h2>{book.canonicalUrl ? <a href={book.canonicalUrl} target="_blank" rel="noreferrer">{book.title}</a> : book.title}</h2>
+                {book.description && <p className="book-status-description">{book.description}</p>}
+              </div>
+            </article>)}
+            {!matchingBooks.length && <p className="empty-books">Nothing here yet.</p>}
+          </section>}
+        </main>
+      </section>
+    </div>
   );
 }
