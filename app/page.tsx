@@ -37,6 +37,7 @@ type Insight = {
 type DailyBrief = {
   id: string;
   summary: string;
+  keyInsights: Array<{ kind: "concept" | "trend" | "fact"; title: string; detail: string; articleIds: string[] }> | string;
   recommendations: Array<{ text: string; articleIds: string[] }> | string;
   articleIds: string;
   createdAt: number;
@@ -207,6 +208,11 @@ export default function Home() {
     if (!dailyBrief) return [];
     if (Array.isArray(dailyBrief.recommendations)) return dailyBrief.recommendations;
     try { return JSON.parse(dailyBrief.recommendations) as Array<{ text: string; articleIds: string[] }>; } catch { return []; }
+  }, [dailyBrief]);
+  const briefKeyInsights = useMemo(() => {
+    if (!dailyBrief?.keyInsights) return [];
+    if (Array.isArray(dailyBrief.keyInsights)) return dailyBrief.keyInsights;
+    try { return JSON.parse(dailyBrief.keyInsights) as Array<{ kind: "concept" | "trend" | "fact"; title: string; detail: string; articleIds: string[] }>; } catch { return []; }
   }, [dailyBrief]);
 
   async function loadData(nextMessage = "") {
@@ -600,7 +606,7 @@ export default function Home() {
           })}</div>
         </section>}
 
-        {active === "Brief" && dailyBrief && <section className="daily-brief"><div className="section-heading"><div><p className="eyebrow">DEEPSEEK DAILY BRIEF · {new Date(dailyBrief.createdAt).toLocaleString()}</p><h2>What you need to know</h2></div><button className="text-button" onClick={() => void refreshAllFeeds()} disabled={busy}>Refresh all feeds <span>↻</span></button></div><OutlineSummary markdown={dailyBrief.summary} /><div className="brief-recommendations"><p className="eyebrow">RECOMMENDED READING</p>{briefRecommendations.map((recommendation, index) => <div className="brief-recommendation" key={index}><p>{recommendation.text}</p><div>{recommendation.articleIds.map((id) => { const article = articles.find((item) => item.id === id); return article ? <a key={id} href={`#article-${id}`} onClick={(event) => { event.preventDefault(); openArticle(article); }}>Read: {article.title} <span>→</span></a> : null; })}</div></div>)}</div></section>}
+        {active === "Brief" && dailyBrief && <section className="daily-brief"><div className="section-heading"><div><p className="eyebrow">DEEPSEEK DAILY BRIEF · {new Date(dailyBrief.createdAt).toLocaleString()}</p><h2>What you need to know</h2></div><button className="text-button" onClick={() => void refreshAllFeeds()} disabled={busy}>Refresh all feeds <span>↻</span></button></div><OutlineSummary markdown={dailyBrief.summary} />{briefKeyInsights.length > 0 && <div className="brief-key-insights"><p className="eyebrow">KEY CONCEPTS, TRENDS &amp; FACTS</p>{briefKeyInsights.map((insight, index) => <article className="brief-key-insight" key={`${insight.kind}-${insight.title}-${index}`}><span className={`brief-insight-kind brief-insight-kind-${insight.kind}`}>{insight.kind}</span><div><h3>{insight.title}</h3><p>{insight.detail}</p>{insight.articleIds.length > 0 && <div className="brief-insight-sources">{insight.articleIds.map((id) => { const article = articles.find((item) => item.id === id); return article ? <a key={id} href={`#article-${id}`} onClick={(event) => { event.preventDefault(); openArticle(article); }}>Source: {article.title} <span>→</span></a> : null; })}</div>}</div></article>)}</div>}<div className="brief-recommendations"><p className="eyebrow">RECOMMENDED READING</p>{briefRecommendations.map((recommendation, index) => <div className="brief-recommendation" key={index}><p>{recommendation.text}</p><div>{recommendation.articleIds.map((id) => { const article = articles.find((item) => item.id === id); return article ? <a key={id} href={`#article-${id}`} onClick={(event) => { event.preventDefault(); openArticle(article); }}>Read: {article.title} <span>→</span></a> : null; })}</div></div>)}</div></section>}
 
         {active !== "Settings" && active !== "Brief" && active !== "Books" && <section className="section-heading"><div><p className="eyebrow">{active === "Saved" ? "SAVED" : active === "Read" ? "READING HISTORY" : active === "Latest" ? "LATEST UNREAD" : "BY SOURCE"}</p><h2>{active === "Saved" ? "For later" : active === "Read" ? "Already read" : active === "Latest" ? selectedLatestSource ? selectedLatestSource.name : "All unread articles" : "All incoming pieces"}</h2></div><button className="text-button" onClick={() => setShowAll(!showAll)}>{showAll ? "Show less" : "See first 6"} <span>→</span></button></section>}
 

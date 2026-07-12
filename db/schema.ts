@@ -12,6 +12,7 @@ export const articleInsights = sqliteTable("article_insights", {
 export const dailyBriefs = sqliteTable("daily_briefs", {
   id: text("id").primaryKey(),
   summary: text("summary").notNull(),
+  keyInsights: text("key_insights").notNull().default("[]"),
   recommendations: text("recommendations").notNull(),
   articleIds: text("article_ids").notNull(),
   createdAt: integer("created_at").notNull(),

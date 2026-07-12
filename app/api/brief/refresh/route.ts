@@ -39,8 +39,11 @@ export async function POST(request: Request) {
     // identify the new themes and the articles worth opening.
     const briefInput = newArticles.slice(0, 80);
     const generated = await generateDailyBrief(briefInput, { apiKey: payload.apiKey, model: models.includes(payload.model as DeepSeekModel) ? payload.model as DeepSeekModel : "deepseek-v4-flash" });
-    const articleIds = [...new Set(generated.recommendations.flatMap((item) => item.articleIds))];
-    const [brief] = await db.insert(dailyBriefs).values({ id: crypto.randomUUID(), summary: generated.summary, recommendations: JSON.stringify(generated.recommendations), articleIds: JSON.stringify(articleIds), createdAt: Date.now() }).returning();
+    const articleIds = [...new Set([
+      ...generated.keyInsights.flatMap((item) => item.articleIds),
+      ...generated.recommendations.flatMap((item) => item.articleIds),
+    ])];
+    const [brief] = await db.insert(dailyBriefs).values({ id: crypto.randomUUID(), summary: generated.summary, keyInsights: JSON.stringify(generated.keyInsights), recommendations: JSON.stringify(generated.recommendations), articleIds: JSON.stringify(articleIds), createdAt: Date.now() }).returning();
     return Response.json({ created: newArticles.length, failures, brief });
   } catch (error) {
     console.error("Daily brief refresh failed", error);

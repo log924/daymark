@@ -1,0 +1,1 @@
+ALTER TABLE `daily_briefs` ADD `key_insights` text DEFAULT '[]' NOT NULL;
