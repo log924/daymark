@@ -27,6 +27,7 @@ export const books = sqliteTable("books", {
   isbn: text("isbn"),
   publishedYear: text("published_year"),
   status: text("status").notNull().default("to_read"),
+  statusChangedAt: integer("status_changed_at"),
   interestScore: integer("interest_score"),
   analysis: text("analysis"),
   connections: text("connections"),

@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import { getDb } from "../../../db";
 import { books } from "../../../db/schema";
 import { ensureDatabase } from "../../../lib/bootstrap";
@@ -71,7 +71,7 @@ async function lookup(url: string) {
 export async function GET() {
   try {
     await ensureDatabase();
-    const rows = await getDb().select().from(books).orderBy(desc(books.updatedAt));
+    const rows = await getDb().select().from(books).orderBy(desc(sql`coalesce(${books.statusChangedAt}, ${books.createdAt})`), desc(books.createdAt));
     return Response.json({ books: rows });
   } catch (error) { return Response.json({ error: toRouteErrorMessage(error) }, { status: 500 }); }
 }
@@ -96,7 +96,7 @@ export async function POST(request: Request) {
       if (existing[0]) return Response.json({ book: existing[0], created: false });
     }
     const now = Date.now();
-    const [book] = await db.insert(books).values({ id: crypto.randomUUID(), title, canonicalUrl, author: details?.author, description: details?.description, coverUrl: details?.coverUrl, subjects: details?.subjects, isbn: details?.isbn, publishedYear: details?.publishedYear, status: ["read", "reading", "to_read"].includes(payload.status ?? "") ? payload.status! : "to_read", createdAt: now, updatedAt: now }).returning();
+    const [book] = await db.insert(books).values({ id: crypto.randomUUID(), title, canonicalUrl, author: details?.author, description: details?.description, coverUrl: details?.coverUrl, subjects: details?.subjects, isbn: details?.isbn, publishedYear: details?.publishedYear, status: ["read", "reading", "to_read"].includes(payload.status ?? "") ? payload.status! : "to_read", statusChangedAt: now, createdAt: now, updatedAt: now }).returning();
     return Response.json({ book, created: true }, { status: 201 });
   } catch (error) { return Response.json({ error: toRouteErrorMessage(error) }, { status: 500 }); }
 }

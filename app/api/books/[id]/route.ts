@@ -44,7 +44,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       return Response.json({ book });
     }
     if (!["read", "reading", "to_read"].includes(payload.status ?? "")) return Response.json({ error: "Invalid status" }, { status: 400 });
-    const [book] = await db.update(books).set({ status: payload.status!, updatedAt: Date.now() }).where(eq(books.id, id)).returning();
+    const now = Date.now();
+    const [book] = await db.update(books).set({ status: payload.status!, statusChangedAt: now, updatedAt: now }).where(eq(books.id, id)).returning();
     return Response.json({ book });
   } catch (error) { return Response.json({ error: toRouteErrorMessage(error) }, { status: 500 }); }
 }

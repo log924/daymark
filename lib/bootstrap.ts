@@ -22,7 +22,7 @@ export async function ensureDatabase() {
       "CREATE TABLE IF NOT EXISTS daily_briefs (id text PRIMARY KEY NOT NULL, summary text NOT NULL, recommendations text NOT NULL, article_ids text NOT NULL, created_at integer NOT NULL)",
     ),
     d1.prepare(
-      "CREATE TABLE IF NOT EXISTS books (id text PRIMARY KEY NOT NULL, title text NOT NULL, author text, canonical_url text, cover_url text, description text, subjects text, isbn text, published_year text, status text DEFAULT 'to_read' NOT NULL, interest_score integer, analysis text, connections text, created_at integer NOT NULL, updated_at integer NOT NULL)",
+      "CREATE TABLE IF NOT EXISTS books (id text PRIMARY KEY NOT NULL, title text NOT NULL, author text, canonical_url text, cover_url text, description text, subjects text, isbn text, published_year text, status text DEFAULT 'to_read' NOT NULL, status_changed_at integer, interest_score integer, analysis text, connections text, created_at integer NOT NULL, updated_at integer NOT NULL)",
     ),
     d1.prepare("CREATE INDEX IF NOT EXISTS articles_source_idx ON articles(source_id)"),
     d1.prepare("CREATE INDEX IF NOT EXISTS articles_published_idx ON articles(published_at)"),
@@ -31,6 +31,14 @@ export async function ensureDatabase() {
 
   try {
     await d1.prepare("ALTER TABLE articles ADD COLUMN read_at integer").run();
+  } catch (error) {
+    if (!(error instanceof Error) || !/duplicate column name/i.test(error.message)) {
+      throw error;
+    }
+  }
+
+  try {
+    await d1.prepare("ALTER TABLE books ADD COLUMN status_changed_at integer").run();
   } catch (error) {
     if (!(error instanceof Error) || !/duplicate column name/i.test(error.message)) {
       throw error;

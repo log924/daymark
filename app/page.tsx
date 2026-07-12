@@ -44,7 +44,7 @@ type Book = {
   id: string; title: string; author: string | null; canonicalUrl: string | null; coverUrl: string | null;
   description: string | null; subjects: string | null; isbn: string | null; publishedYear: string | null;
   status: "read" | "reading" | "to_read"; interestScore: number | null; analysis: string | null; connections: string | null;
-  createdAt: number; updatedAt: number;
+  createdAt: number; updatedAt: number; statusChangedAt: number | null;
 };
 
 function bookCoverSrc(coverUrl: string) {

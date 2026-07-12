@@ -1,0 +1,1 @@
+ALTER TABLE `books` ADD `status_changed_at` integer;
