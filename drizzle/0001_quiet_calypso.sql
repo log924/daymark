@@ -15,13 +15,3 @@ CREATE TABLE `books` (
 	`created_at` integer NOT NULL,
 	`updated_at` integer NOT NULL
 );
---> statement-breakpoint
-CREATE TABLE `daily_briefs` (
-	`id` text PRIMARY KEY NOT NULL,
-	`summary` text NOT NULL,
-	`recommendations` text NOT NULL,
-	`article_ids` text NOT NULL,
-	`created_at` integer NOT NULL
-);
---> statement-breakpoint
-ALTER TABLE `articles` ADD `read_at` integer;
