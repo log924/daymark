@@ -179,12 +179,13 @@ export default function Home() {
   );
   const briefArticles = articles.slice(0, showAll ? 6 : 3);
   const savedArticles = articles.filter((article) => article.status === "saved" || saved.includes(article.id));
+  const readArticles = articles.filter((article) => article.readAt).sort((a, b) => (b.readAt ?? 0) - (a.readAt ?? 0));
   const selectedLatestSource = sources.find((source) => source.id === selectedLatestSourceId) ?? sources[0] ?? null;
   const latestUnreadArticles = selectedLatestSource
     ? articles.filter((article) => article.sourceId === selectedLatestSource.id && !article.readAt).sort((a, b) => (b.publishedAt ?? 0) - (a.publishedAt ?? 0))
     : [];
   const visibleArticles =
-    active === "Saved" ? savedArticles : active === "Latest" ? selectedLatestSourceId ? latestUnreadArticles : articles.filter((article) => !article.readAt) : active === "Sources" ? articles : briefArticles;
+    active === "Saved" ? savedArticles : active === "Read" ? readArticles : active === "Latest" ? selectedLatestSourceId ? latestUnreadArticles : articles.filter((article) => !article.readAt) : active === "Sources" ? articles : briefArticles;
   const selectedSource = selectedArticle?.sourceId ? sourceById.get(selectedArticle.sourceId) : null;
   const selectedInsight = selectedArticle ? insights[selectedArticle.id] : null;
   const todayCount = Math.min(6, articles.length);
@@ -511,9 +512,9 @@ export default function Home() {
       <aside className="sidebar">
         <a className="brand" href="#top" aria-label="Daymark home"><span>✦</span> daymark</a>
         <nav aria-label="Main navigation">
-          {["Brief", "Latest", "Sources", "Saved", "Books", "Settings"].map((name) => (
+          {["Brief", "Latest", "Sources", "Saved", "Read", "Books", "Settings"].map((name) => (
             <div key={name} className="nav-group"><button className={active === name ? "nav-item active" : "nav-item"} onClick={() => { setActive(name); if (name === "Latest") setSelectedLatestSourceId(null); }}>
-              <span>{name === "Brief" ? "◒" : name === "Latest" ? "◷" : name === "Sources" ? "◉" : name === "Saved" ? "♡" : name === "Books" ? "▤" : "⚙"}</span>{name}
+              <span>{name === "Brief" ? "◒" : name === "Latest" ? "◷" : name === "Sources" ? "◉" : name === "Saved" ? "♡" : name === "Read" ? "✓" : name === "Books" ? "▤" : "⚙"}</span>{name}
               {name === "Latest" && <b>{unreadCount}</b>}
             </button>{name === "Sources" && sources.length > 0 && <div className="source-nav-list">{sources.map((source, index) => { const unread = articles.filter((article) => article.sourceId === source.id && !article.readAt).length; return <button key={source.id} className={active === "Latest" && selectedLatestSource?.id === source.id ? "source-nav-item active" : "source-nav-item"} onClick={() => { setActive("Latest"); setSelectedLatestSourceId(source.id); setShowAll(false); }}><span className="source-logo" style={{ background: sourceColors[index % sourceColors.length] }}>{source.name.charAt(0).toUpperCase()}</span><span>{source.name}</span><b>{unread}</b></button>; })}</div>}</div>
           ))}
@@ -569,7 +570,7 @@ export default function Home() {
 
         {active === "Brief" && dailyBrief && <section className="daily-brief"><div className="section-heading"><div><p className="eyebrow">DEEPSEEK DAILY BRIEF · {new Date(dailyBrief.createdAt).toLocaleString()}</p><h2>What you need to know</h2></div><button className="text-button" onClick={() => void refreshAllFeeds()} disabled={busy}>Refresh all feeds <span>↻</span></button></div><OutlineSummary markdown={dailyBrief.summary} /><div className="brief-recommendations"><p className="eyebrow">RECOMMENDED READING</p>{briefRecommendations.map((recommendation, index) => <div className="brief-recommendation" key={index}><p>{recommendation.text}</p><div>{recommendation.articleIds.map((id) => { const article = articles.find((item) => item.id === id); return article ? <a key={id} href={`#article-${id}`} onClick={(event) => { event.preventDefault(); openArticle(article); }}>Read: {article.title} <span>→</span></a> : null; })}</div></div>)}</div></section>}
 
-        {active !== "Settings" && active !== "Brief" && active !== "Books" && <section className="section-heading"><div><p className="eyebrow">{active === "Saved" ? "SAVED" : active === "Latest" ? "LATEST UNREAD" : "BY SOURCE"}</p><h2>{active === "Saved" ? "For later" : active === "Latest" ? selectedLatestSource ? selectedLatestSource.name : "All unread articles" : "All incoming pieces"}</h2></div><button className="text-button" onClick={() => setShowAll(!showAll)}>{showAll ? "Show less" : "See first 6"} <span>→</span></button></section>}
+        {active !== "Settings" && active !== "Brief" && active !== "Books" && <section className="section-heading"><div><p className="eyebrow">{active === "Saved" ? "SAVED" : active === "Read" ? "READING HISTORY" : active === "Latest" ? "LATEST UNREAD" : "BY SOURCE"}</p><h2>{active === "Saved" ? "For later" : active === "Read" ? "Already read" : active === "Latest" ? selectedLatestSource ? selectedLatestSource.name : "All unread articles" : "All incoming pieces"}</h2></div><button className="text-button" onClick={() => setShowAll(!showAll)}>{showAll ? "Show less" : "See first 6"} <span>→</span></button></section>}
 
         {active !== "Settings" && active !== "Brief" && active !== "Books" && <section className="story-grid">
           {visibleArticles.map((article, index) => {
@@ -584,7 +585,7 @@ export default function Home() {
         </section>}
 
         {active === "Brief" && !dailyBrief && <div className="empty-state">Click <strong>Refresh feeds</strong> to fetch every RSS source and create your first Simplified Chinese daily brief.</div>}
-        {active !== "Settings" && active !== "Brief" && active !== "Books" && !visibleArticles.length && <div className="empty-state">Use Add source to connect an RSS feed, or save a page link, and Daymark will start filling this desk.</div>}
+        {active !== "Settings" && active !== "Brief" && active !== "Books" && !visibleArticles.length && <div className="empty-state">{active === "Read" ? "Articles you finish will appear here." : "Use Add source to connect an RSS feed, or save a page link, and Daymark will start filling this desk."}</div>}
 
         {active === "Sources" && <section className="sources-panel"><div className="section-heading"><div><p className="eyebrow">FOLLOWING</p><h2>From your sources</h2></div><button className="text-button" onClick={() => setShowCapture(true)}>Add RSS <span>→</span></button></div><div className="source-list">{sources.map((source, index) => <div key={source.id} className="source-row"><span className="source-logo" style={{background: sourceColors[index % sourceColors.length]}}>{source.name.charAt(0).toUpperCase()}</span><div className="source-details"><strong>{source.name}</strong><small>{source.url}</small></div><span>{source.articleCount} articles</span><div className="source-controls"><button onClick={() => openSourceEditor(source)}>Edit</button><button className="remove-source" onClick={() => setSourceToRemove(source)}>Remove</button></div></div>)}</div></section>}
       </section>
