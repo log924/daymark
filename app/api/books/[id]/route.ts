@@ -37,7 +37,7 @@ async function refreshBookMetadata(book: typeof books.$inferSelect) {
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    await ensureDatabase(); const { id } = await context.params; const payload = (await request.json()) as { status?: string; statusChangedAt?: number; personalRating?: number | null; refreshMetadata?: boolean };
+    await ensureDatabase(); const { id } = await context.params; const payload = (await request.json()) as { status?: string; statusChangedAt?: number; personalRating?: number | null; refreshMetadata?: boolean; aiTags?: string[] };
     const db = getDb(); const [existing] = await db.select().from(books).where(eq(books.id, id)).limit(1);
     if (!existing) return Response.json({ error: "Book not found" }, { status: 404 });
     if (payload.refreshMetadata) {
@@ -53,6 +53,26 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     if ("statusChangedAt" in payload) {
       if (!Number.isFinite(payload.statusChangedAt) || (payload.statusChangedAt ?? 0) <= 0) return Response.json({ error: "Invalid status change date" }, { status: 400 });
       const [book] = await db.update(books).set({ statusChangedAt: Math.round(payload.statusChangedAt!), updatedAt: Date.now() }).where(eq(books.id, id)).returning();
+      return Response.json({ book });
+    }
+    if ("aiTags" in payload) {
+      if (!Array.isArray(payload.aiTags)) return Response.json({ error: "Invalid tag list" }, { status: 400 });
+      let existingTags = await db.select().from(tags).limit(300);
+      const resolved = [] as Array<{ id: string; name: string; normalizedName: string }>;
+      for (const requestedTag of payload.aiTags) {
+        if (typeof requestedTag !== "string") continue;
+        const normalizedName = normalizeTag(requestedTag);
+        if (!normalizedName || resolved.some((tag) => tag.normalizedName === normalizedName)) continue;
+        let tag = existingTags.find((item) => item.normalizedName === normalizedName);
+        if (!tag) {
+          const [created] = await db.insert(tags).values({ id: crypto.randomUUID(), name: requestedTag.trim(), normalizedName, createdAt: Date.now() }).returning();
+          tag = created; existingTags = [...existingTags, created];
+        }
+        resolved.push(tag);
+      }
+      await db.delete(bookTags).where(eq(bookTags.bookId, id));
+      for (const tag of resolved) await db.insert(bookTags).values({ bookId: id, tagId: tag.id, createdAt: Date.now() });
+      const [book] = await db.update(books).set({ aiTags: JSON.stringify(resolved.map((tag) => tag.name)), updatedAt: Date.now() }).where(eq(books.id, id)).returning();
       return Response.json({ book });
     }
     if (!["read", "reading", "to_read"].includes(payload.status ?? "")) return Response.json({ error: "Invalid status" }, { status: 400 });
