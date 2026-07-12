@@ -396,7 +396,12 @@ export default function Home() {
       setBookTitle(""); setBookUrl(""); setShowCapture(false);
       await loadData(payload.created ? `Added ${payload.book.title} to your shelf.` : "That book is already on your shelf.");
       if (payload.created && deepSeekApiKey.trim()) {
-        await analyzeBook(payload.book, { progressMessage: "Analyzing your new book against your reading history...", successMessage: `Added ${payload.book.title} and saved its fit analysis.` });
+        const shouldRunFitness = payload.book.status === "to_read" || payload.book.status === "reading";
+        await analyzeBook(payload.book, {
+          includeFitness: shouldRunFitness,
+          progressMessage: shouldRunFitness ? "Analyzing your new book against your reading history..." : "Generating tags for your new book...",
+          successMessage: shouldRunFitness ? `Added ${payload.book.title} and saved its fit analysis.` : `Added ${payload.book.title} and generated its tags.`,
+        });
       }
     } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to add book"); } finally { setBusy(false); }
   }
@@ -448,11 +453,11 @@ export default function Home() {
     } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to refresh metadata"); } finally { setBusy(false); }
   }
 
-  async function analyzeBook(book: Book, options?: { progressMessage?: string; successMessage?: string }) {
+  async function analyzeBook(book: Book, options?: { includeFitness?: boolean; progressMessage?: string; successMessage?: string }) {
     if (!deepSeekApiKey.trim()) { setActive("Settings"); setMessage("Add your DeepSeek API key in Settings to analyze book fit."); return; }
     setBusy(true); setMessage(options?.progressMessage ?? "Comparing this book with your reading history...");
     try {
-      const response = await fetch(`/api/books/${book.id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ apiKey: deepSeekApiKey, model: deepSeekModel }) });
+      const response = await fetch(`/api/books/${book.id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ apiKey: deepSeekApiKey, model: deepSeekModel, includeFitness: options?.includeFitness ?? true }) });
       const payload = await response.json() as { book?: Book; error?: string };
       if (!response.ok || !payload.book) throw new Error(payload.error ?? "Unable to analyze book");
       setBooks((current) => current.map((item) => item.id === book.id ? payload.book! : item)); setSelectedBook((current) => current?.id === book.id ? payload.book! : current); setMessage(options?.successMessage ?? "Book fit analysis saved.");

@@ -64,7 +64,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   try {
-    await ensureDatabase(); const { id } = await context.params; const settings = (await request.json()) as AiSettings;
+    await ensureDatabase(); const { id } = await context.params; const payload = (await request.json()) as AiSettings & { includeFitness?: boolean }; const { includeFitness = true, ...settings } = payload;
     const db = getDb(); const [book] = await db.select().from(books).where(eq(books.id, id)).limit(1);
     if (!book) return Response.json({ error: "Book not found" }, { status: 404 });
     const [historyBooks, historyArticles] = await Promise.all([db.select().from(books).limit(80), db.select().from(articles).limit(100)]);
@@ -95,7 +95,13 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     }
     await db.delete(bookTags).where(eq(bookTags.bookId, id));
     for (const tag of resolved) await db.insert(bookTags).values({ bookId: id, tagId: tag.id, createdAt: Date.now() });
-    const [updated] = await db.update(books).set({ interestScore: result.interestScore, analysis: result.analysis, aiTags: JSON.stringify(resolved.map((tag) => tag.name)), connections: JSON.stringify(result.connections), updatedAt: Date.now() }).where(eq(books.id, id)).returning();
+    const [updated] = await db.update(books).set({
+      aiTags: JSON.stringify(resolved.map((tag) => tag.name)),
+      interestScore: includeFitness ? result.interestScore : book.interestScore,
+      analysis: includeFitness ? result.analysis : book.analysis,
+      connections: includeFitness ? JSON.stringify(result.connections) : book.connections,
+      updatedAt: Date.now(),
+    }).where(eq(books.id, id)).returning();
     return Response.json({ book: updated });
   } catch (error) { return Response.json({ error: toRouteErrorMessage(error) }, { status: 500 }); }
 }
