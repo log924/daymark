@@ -97,7 +97,7 @@ export default function BookStatusPage() {
               {book.coverUrl ? <img src={bookCoverSrc(book.coverUrl)} alt="" /> : <div className="book-status-spine" aria-hidden="true">{book.title.slice(0, 1)}</div>}
               <div>
                 <p className="eyebrow">{displayAuthor(book.author)}</p>
-                <h2>{book.canonicalUrl ? <a href={book.canonicalUrl} target="_blank" rel="noreferrer">{book.title}</a> : book.title}</h2>
+                <h2><Link href={`/?book=${encodeURIComponent(book.id)}`}>{book.title}</Link></h2>
                 {book.description && <p className="book-status-description">{book.description}</p>}
               </div>
             </article>)}

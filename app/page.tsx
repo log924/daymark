@@ -2,6 +2,7 @@
 
 import { Dispatch, FormEvent, SetStateAction, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
 type Source = {
   id: string;
@@ -155,6 +156,7 @@ function OutlineSummary({ markdown }: { markdown: string | null }) {
 }
 
 export default function Home() {
+  const searchParams = useSearchParams();
   const [active, setActive] = useState("Brief");
   const [articles, setArticles] = useState<Article[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
@@ -170,6 +172,7 @@ export default function Home() {
   const [selectedLatestSourceId, setSelectedLatestSourceId] = useState<string | null>(null);
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
+  const [dismissedBookId, setDismissedBookId] = useState<string | null>(null);
   const [feedUrl, setFeedUrl] = useState("");
   const [sourceName, setSourceName] = useState("");
   const [sourceUrl, setSourceUrl] = useState("");
@@ -182,6 +185,7 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [deepSeekApiKey, setDeepSeekApiKey] = useState("");
   const [deepSeekModel, setDeepSeekModel] = useState("deepseek-v4-flash");
+  const requestedBookId = searchParams.get("book");
 
   const sourceById = useMemo(
     () => new Map(sources.map((source) => [source.id, source])),
@@ -247,6 +251,14 @@ export default function Home() {
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    if (!requestedBookId || requestedBookId === dismissedBookId) return;
+    const requestedBook = books.find((book) => book.id === requestedBookId);
+    if (!requestedBook) return;
+    const timer = window.setTimeout(() => setSelectedBook(requestedBook), 0);
+    return () => window.clearTimeout(timer);
+  }, [books, dismissedBookId, requestedBookId]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -604,6 +616,16 @@ export default function Home() {
 
   function openBook(book: Book) { setSelectedBook(book); }
 
+  function closeSelectedBook() {
+    if (requestedBookId) setDismissedBookId(requestedBookId);
+    if (requestedBookId) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("book");
+      window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    }
+    setSelectedBook(null);
+  }
+
   return (
     <main className="app-shell">
       <aside className="sidebar">
@@ -743,14 +765,14 @@ export default function Home() {
       )}
 
       {selectedBook && (
-        <div className="modal-backdrop reader-backdrop" role="dialog" aria-modal="true" aria-label="Book details" onClick={() => setSelectedBook(null)}>
+        <div className="modal-backdrop reader-backdrop" role="dialog" aria-modal="true" aria-label="Book details" onClick={closeSelectedBook}>
           <article className="reader-modal book-reader-modal" onClick={(event) => event.stopPropagation()}>
-            <div className="modal-head"><div><p className="eyebrow">YOUR LIBRARY · {selectedBook.status === "reading" ? "READING NOW" : selectedBook.status === "to_read" ? "TO BE READ" : "READ"}</p><h2>{selectedBook.title}</h2>{displayAuthor(selectedBook.author) && <p className="book-reader-author">by {displayAuthor(selectedBook.author)}</p>}</div><button onClick={() => setSelectedBook(null)} aria-label="Close">×</button></div>
+            <div className="modal-head"><div><p className="eyebrow">YOUR LIBRARY · {selectedBook.status === "reading" ? "READING NOW" : selectedBook.status === "to_read" ? "TO BE READ" : "READ"}</p><h2>{selectedBook.title}</h2>{displayAuthor(selectedBook.author) && <p className="book-reader-author">by {displayAuthor(selectedBook.author)}</p>}</div><button onClick={closeSelectedBook} aria-label="Close">×</button></div>
             <section className="book-reader-hero">{selectedBook.coverUrl ? <img src={bookCoverSrc(selectedBook.coverUrl)} alt={`Cover of ${selectedBook.title}`} /> : <div className="book-reader-spine">{selectedBook.title.slice(0, 1)}</div>}<div className="book-facts"><div className="book-status-control"><span>Reading status</span><select aria-label={`Reading status for ${selectedBook.title}`} value={selectedBook.status} onChange={(event) => void updateBookStatus(selectedBook, event.target.value as Book["status"])}><option value="reading">Reading now</option><option value="to_read">To be read</option><option value="read">Read</option></select></div><div className="book-status-control"><span>Your rating</span><select aria-label={`Your rating for ${selectedBook.title}`} value={selectedBook.personalRating ?? ""} onChange={(event) => void updateBookRating(selectedBook, event.target.value ? Number(event.target.value) : null)}><option value="">Not rated</option>{[1, 2, 3, 4, 5].map((rating) => <option key={rating} value={rating}>{"★".repeat(rating)} {rating}/5</option>)}</select></div><div className="book-status-control"><span>Last status change</span><small>{statusChangeLabel(selectedBook.statusChangedAt)}</small><input type="datetime-local" aria-label={`Last status change for ${selectedBook.title}`} value={statusChangeInputValue(selectedBook.statusChangedAt)} onChange={(event) => void updateStatusChangeDate(selectedBook, event.target.value)} /></div>{selectedBook.interestScore !== null && <div className="book-fit-large"><strong>{selectedBook.interestScore}</strong><span>interest fit</span></div>}<dl>{selectedBook.publishedYear && <><dt>Published</dt><dd>{selectedBook.publishedYear}</dd></>}{selectedBook.isbn && <><dt>ISBN</dt><dd>{selectedBook.isbn}</dd></>}{bookTags(selectedBook).length > 0 && <><dt>Tags</dt><dd className="book-metadata-tags">{bookTags(selectedBook).map((tag) => <button type="button" className="book-tag-button" key={tag} onClick={() => void removeBookTag(selectedBook, tag)} disabled={busy} aria-label={`Remove tag ${tag}`}>{tag}<span aria-hidden="true">×</span></button>)}</dd></>}{selectedBook.subjects && <><dt>Source tags</dt><dd>{selectedBook.subjects}</dd></>}</dl></div></section>
             <section className="book-detail-section"><div className="detail-heading"><div><p className="eyebrow">ABOUT THE BOOK</p></div>{selectedBook.canonicalUrl?.includes("book.douban.com") && <button className="analyze-button" disabled={busy} onClick={() => void refreshBookMetadata(selectedBook)}>Refresh from Douban</button>}</div><div className="reader-body">{selectedBook.description ? selectedBook.description.split(/\n{2,}/).map((paragraph, index) => <p key={index}>{paragraph}</p>) : <p>No description was available when this book was added. Use “Refresh from Douban” to import its latest book details.</p>}</div></section>
             <section className="book-detail-section book-fit-detail"><div className="detail-heading"><div><p className="eyebrow">PERSONAL FIT</p><h3>Why it may matter to you</h3></div><button className="analyze-button" disabled={busy} onClick={() => void analyzeBook(selectedBook)}>{selectedBook.analysis ? "Refresh analysis" : "Analyze fit"}</button></div>{selectedBook.analysis ? <OutlineSummary markdown={selectedBook.analysis} /> : <p className="detail-empty">Run an analysis to compare this book with the books and articles already in your reading history.</p>}</section>
             {bookConnections(selectedBook).length > 0 && <section className="book-detail-section"><p className="eyebrow">CONNECTED READING</p><div className="book-connection-cards">{bookConnections(selectedBook).map((connection) => { const linkedBook = connection.type === "book" ? books.find((book) => book.id === connection.id) : null; const linkedArticle = connection.type === "article" ? articles.find((article) => article.id === connection.id) : null; const item = linkedBook ?? linkedArticle; if (!item) return null; return <button key={`${connection.type}-${connection.id}`} onClick={() => connection.type === "book" ? openBook(linkedBook!) : openArticle(linkedArticle!)}><span>{connection.type === "book" ? "BOOK" : "ARTICLE"}</span><strong>{item.title}</strong><small>{connection.reason}</small></button>; })}</div></section>}
-            <div className="reader-actions">{selectedBook.canonicalUrl && <a href={selectedBook.canonicalUrl} target="_blank" rel="noreferrer">Open original source ↗</a>}<button className="secondary-button" onClick={() => setSelectedBook(null)}>Back to shelf</button></div>
+            <div className="reader-actions">{selectedBook.canonicalUrl && <a href={selectedBook.canonicalUrl} target="_blank" rel="noreferrer">Open original source ↗</a>}<button className="secondary-button" onClick={closeSelectedBook}>Back to shelf</button></div>
           </article>
         </div>
       )}
