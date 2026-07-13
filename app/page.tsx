@@ -187,22 +187,24 @@ export default function Home() {
     () => new Map(sources.map((source) => [source.id, source])),
     [sources],
   );
-  const briefArticles = articles.slice(0, showAll ? 6 : 3);
-  const savedArticles = articles.filter((article) => article.status === "saved" || saved.includes(article.id));
-  const readArticles = articles.filter((article) => article.readAt).sort((a, b) => (b.readAt ?? 0) - (a.readAt ?? 0));
+  const activeArticles = articles.filter((article) => article.status !== "passed");
+  const briefArticles = activeArticles.slice(0, showAll ? 6 : 3);
+  const savedArticles = activeArticles.filter((article) => article.status === "saved" || saved.includes(article.id));
+  const readArticles = activeArticles.filter((article) => article.readAt).sort((a, b) => (b.readAt ?? 0) - (a.readAt ?? 0));
+  const passedArticles = articles.filter((article) => article.status === "passed");
   // The API returns books newest first. Keep the dashboard shelf intentionally small
   // while preserving the full collection on each status page.
   const latestBooks = books.slice(0, 20);
   const selectedLatestSource = sources.find((source) => source.id === selectedLatestSourceId) ?? sources[0] ?? null;
   const latestUnreadArticles = selectedLatestSource
-    ? articles.filter((article) => article.sourceId === selectedLatestSource.id && !article.readAt).sort((a, b) => (b.publishedAt ?? 0) - (a.publishedAt ?? 0))
+    ? activeArticles.filter((article) => article.sourceId === selectedLatestSource.id && !article.readAt).sort((a, b) => (b.publishedAt ?? 0) - (a.publishedAt ?? 0))
     : [];
   const visibleArticles =
-    active === "Saved" ? savedArticles : active === "Read" ? readArticles : active === "Latest" ? selectedLatestSourceId ? latestUnreadArticles : articles.filter((article) => !article.readAt) : active === "Sources" ? articles : briefArticles;
+    active === "Saved" ? savedArticles : active === "Read" ? readArticles : active === "Passed" ? passedArticles : active === "Latest" ? selectedLatestSourceId ? latestUnreadArticles : activeArticles.filter((article) => !article.readAt) : active === "Sources" ? activeArticles : briefArticles;
   const selectedSource = selectedArticle?.sourceId ? sourceById.get(selectedArticle.sourceId) : null;
   const selectedInsight = selectedArticle ? insights[selectedArticle.id] : null;
   const todayCount = Math.min(6, articles.length);
-  const unreadCount = articles.filter((article) => !article.readAt).length;
+  const unreadCount = activeArticles.filter((article) => !article.readAt).length;
   const readingMinutes = Math.max(1, Math.round(articles.slice(0, 6).length * 4));
   const briefRecommendations = useMemo(() => {
     if (!dailyBrief) return [];
@@ -539,6 +541,30 @@ export default function Home() {
     }
   }
 
+  async function setPassedState(article: Article, passed: boolean) {
+    const previous = article;
+    const updated = passed ? { ...article, status: "passed" } : { ...article, status: "new", readAt: null };
+    setArticles((current) => current.map((item) => item.id === article.id ? updated : item));
+    setSelectedArticle((current) => current?.id === article.id ? updated : current);
+
+    try {
+      const response = await fetch(`/api/articles/${article.id}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ passed }),
+      });
+      const payload = await response.json() as { article?: Article; error?: string };
+      if (!response.ok || !payload.article) throw new Error(payload.error ?? "Unable to update article state");
+      setArticles((current) => current.map((item) => item.id === article.id ? payload.article! : item));
+      setSelectedArticle((current) => current?.id === article.id ? payload.article! : current);
+      setMessage(passed ? "Article passed for now. You can restore it from Passed." : "Article restored to your unread queue.");
+    } catch (error) {
+      setArticles((current) => current.map((item) => item.id === article.id ? previous : item));
+      setSelectedArticle((current) => current?.id === article.id ? previous : current);
+      setMessage(error instanceof Error ? error.message : "Unable to update article state");
+    }
+  }
+
   function openArticle(article: Article) {
     setSelectedArticle(article);
     if (!article.readAt) void setReadState(article, true);
@@ -551,11 +577,12 @@ export default function Home() {
       <aside className="sidebar">
         <a className="brand" href="#top" aria-label="Daymark home"><span>✦</span> daymark</a>
         <nav aria-label="Main navigation">
-          {["Brief", "Latest", "Sources", "Saved", "Read", "Books", "Settings"].map((name) => (
+          {["Brief", "Latest", "Sources", "Saved", "Read", "Passed", "Books", "Settings"].map((name) => (
             <div key={name} className="nav-group"><button className={active === name ? "nav-item active" : "nav-item"} onClick={() => { setActive(name); if (name === "Latest") setSelectedLatestSourceId(null); }}>
-              <span>{name === "Brief" ? "◒" : name === "Latest" ? "◷" : name === "Sources" ? "◉" : name === "Saved" ? "♡" : name === "Read" ? "✓" : name === "Books" ? "▤" : "⚙"}</span>{name}
+              <span>{name === "Brief" ? "◒" : name === "Latest" ? "◷" : name === "Sources" ? "◉" : name === "Saved" ? "♡" : name === "Read" ? "✓" : name === "Passed" ? "⊘" : name === "Books" ? "▤" : "⚙"}</span>{name}
               {name === "Latest" && <b>{unreadCount}</b>}
-            </button>{name === "Sources" && sources.length > 0 && <div className="source-nav-list">{sources.map((source, index) => { const unread = articles.filter((article) => article.sourceId === source.id && !article.readAt).length; return <button key={source.id} className={active === "Latest" && selectedLatestSource?.id === source.id ? "source-nav-item active" : "source-nav-item"} onClick={() => { setActive("Latest"); setSelectedLatestSourceId(source.id); setShowAll(false); }}><span className="source-logo" style={{ background: sourceColors[index % sourceColors.length] }}>{source.name.charAt(0).toUpperCase()}</span><span>{source.name}</span><b>{unread}</b></button>; })}</div>}</div>
+              {name === "Passed" && <b>{passedArticles.length}</b>}
+            </button>{name === "Sources" && sources.length > 0 && <div className="source-nav-list">{sources.map((source, index) => { const unread = activeArticles.filter((article) => article.sourceId === source.id && !article.readAt).length; return <button key={source.id} className={active === "Latest" && selectedLatestSource?.id === source.id ? "source-nav-item active" : "source-nav-item"} onClick={() => { setActive("Latest"); setSelectedLatestSourceId(source.id); setShowAll(false); }}><span className="source-logo" style={{ background: sourceColors[index % sourceColors.length] }}>{source.name.charAt(0).toUpperCase()}</span><span>{source.name}</span><b>{unread}</b></button>; })}</div>}</div>
           ))}
         </nav>
         <div className="sidebar-spacer" />
@@ -613,22 +640,22 @@ export default function Home() {
 
         {active === "Brief" && dailyBrief && <section className="daily-brief"><div className="section-heading"><div><p className="eyebrow">DEEPSEEK DAILY BRIEF · {new Date(dailyBrief.createdAt).toLocaleString()}</p><h2>What you need to know</h2></div><button className="text-button" onClick={() => void refreshAllFeeds()} disabled={busy}>Refresh all feeds <span>↻</span></button></div><OutlineSummary markdown={dailyBrief.summary} />{briefKeyInsights.length > 0 && <div className="brief-key-insights"><p className="eyebrow">KEY CONCEPTS, TRENDS &amp; FACTS</p>{briefKeyInsights.map((insight, index) => <article className="brief-key-insight" key={`${insight.kind}-${insight.title}-${index}`}><span className={`brief-insight-kind brief-insight-kind-${insight.kind}`}>{insight.kind}</span><div><h3>{insight.title}</h3><p>{insight.detail}</p>{insight.articleIds.length > 0 && <div className="brief-insight-sources">{insight.articleIds.map((id) => { const article = articles.find((item) => item.id === id); return article ? <a key={id} href={`#article-${id}`} onClick={(event) => { event.preventDefault(); openArticle(article); }}>Source: {article.title} <span>→</span></a> : null; })}</div>}</div></article>)}</div>}<div className="brief-recommendations"><p className="eyebrow">RECOMMENDED READING</p>{briefRecommendations.map((recommendation, index) => <div className="brief-recommendation" key={index}><p>{recommendation.text}</p><div>{recommendation.articleIds.map((id) => { const article = articles.find((item) => item.id === id); return article ? <a key={id} href={`#article-${id}`} onClick={(event) => { event.preventDefault(); openArticle(article); }}>Read: {article.title} <span>→</span></a> : null; })}</div></div>)}</div></section>}
 
-        {active !== "Settings" && active !== "Brief" && active !== "Books" && <section className="section-heading"><div><p className="eyebrow">{active === "Saved" ? "SAVED" : active === "Read" ? "READING HISTORY" : active === "Latest" ? "LATEST UNREAD" : "BY SOURCE"}</p><h2>{active === "Saved" ? "For later" : active === "Read" ? "Already read" : active === "Latest" ? selectedLatestSource ? selectedLatestSource.name : "All unread articles" : "All incoming pieces"}</h2></div><button className="text-button" onClick={() => setShowAll(!showAll)}>{showAll ? "Show less" : "See first 6"} <span>→</span></button></section>}
+        {active !== "Settings" && active !== "Brief" && active !== "Books" && <section className="section-heading"><div><p className="eyebrow">{active === "Saved" ? "SAVED" : active === "Read" ? "READING HISTORY" : active === "Passed" ? "REVIEW PASSED" : active === "Latest" ? "LATEST UNREAD" : "BY SOURCE"}</p><h2>{active === "Saved" ? "For later" : active === "Read" ? "Already read" : active === "Passed" ? "Passed for now" : active === "Latest" ? selectedLatestSource ? selectedLatestSource.name : "All unread articles" : "All incoming pieces"}</h2></div><button className="text-button" onClick={() => setShowAll(!showAll)}>{showAll ? "Show less" : "See first 6"} <span>→</span></button></section>}
 
         {active !== "Settings" && active !== "Brief" && active !== "Books" && <section className="story-grid">
           {visibleArticles.map((article, index) => {
             const source = article.sourceId ? sourceById.get(article.sourceId) : null;
             return (
-            <article className={`story-card ${colors[index % colors.length]}${article.readAt ? " is-read" : " is-unread"}`} key={article.id} role="button" tabIndex={0} onClick={() => openArticle(article)} onKeyDown={(event) => event.key === "Enter" && openArticle(article)}>
-              <div className="story-meta"><span className="source-dot"/><span>{source?.name ?? "Saved page"}</span><em>·</em><span>{relativeTime(article.publishedAt ?? article.savedAt)}</span>{!article.readAt && <span className="unread-badge">Unread</span>}<button onClick={(event) => { event.stopPropagation(); toggle(article.id, setSaved); }} aria-label="Save article">{saved.includes(article.id) || article.status === "saved" ? "♥" : "♡"}</button></div>
+            <article className={`story-card ${colors[index % colors.length]}${article.readAt ? " is-read" : " is-unread"}${article.status === "passed" ? " is-passed" : ""}`} key={article.id} role="button" tabIndex={0} onClick={() => openArticle(article)} onKeyDown={(event) => event.key === "Enter" && openArticle(article)}>
+              <div className="story-meta"><span className="source-dot"/><span>{source?.name ?? "Saved page"}</span><em>·</em><span>{relativeTime(article.publishedAt ?? article.savedAt)}</span>{!article.readAt && article.status !== "passed" && <span className="unread-badge">Unread</span>}<button onClick={(event) => { event.stopPropagation(); toggle(article.id, setSaved); }} aria-label="Save article">{saved.includes(article.id) || article.status === "saved" ? "♥" : "♡"}</button></div>
               <span className="tag">{source?.kind ?? "Manual"}</span><h3>{article.title}</h3><p>{articleSnippet(article)}</p>
-              <div className="story-foot"><span>✦ {article.readAt ? "Read" : article.status === "saved" ? "Saved manually" : "Fresh from your RSS list"}</span><div className="story-actions"><button onClick={(event) => { event.stopPropagation(); processInsight(article); }} disabled={processingInsight === article.id}>{insights[article.id]?.summary ? "Summary ready" : processingInsight === article.id ? "Summarizing…" : "Summarize"}</button><button onClick={(event) => { event.stopPropagation(); void setReadState(article, !article.readAt); }}>{article.readAt ? "Mark unread" : "Mark read"}</button><button className="read" onClick={(event) => { event.stopPropagation(); openArticle(article); }}>Open <span>→</span></button></div></div>
+              <div className="story-foot"><span>✦ {article.status === "passed" ? "Passed for now" : article.readAt ? "Read" : article.status === "saved" ? "Saved manually" : "Fresh from your RSS list"}</span><div className="story-actions"><button onClick={(event) => { event.stopPropagation(); processInsight(article); }} disabled={processingInsight === article.id}>{insights[article.id]?.summary ? "Summary ready" : processingInsight === article.id ? "Summarizing…" : "Summarize"}</button>{article.status === "passed" ? <button className="restore" onClick={(event) => { event.stopPropagation(); void setPassedState(article, false); }}>Restore to queue</button> : <><button onClick={(event) => { event.stopPropagation(); void setReadState(article, !article.readAt); }}>{article.readAt ? "Mark unread" : "Mark read"}</button><button className="pass" onClick={(event) => { event.stopPropagation(); void setPassedState(article, true); }} aria-label={`Pass ${article.title}`}>Pass</button></>}<button className="read" onClick={(event) => { event.stopPropagation(); openArticle(article); }}>Open <span>→</span></button></div></div>
             </article>
           )})}
         </section>}
 
         {active === "Brief" && !dailyBrief && <div className="empty-state">Click <strong>Refresh feeds</strong> to fetch every RSS source and create your first Simplified Chinese daily brief.</div>}
-        {active !== "Settings" && active !== "Brief" && active !== "Books" && !visibleArticles.length && <div className="empty-state">{active === "Read" ? "Articles you finish will appear here." : "Use Add source to connect an RSS feed, or save a page link, and Daymark will start filling this desk."}</div>}
+        {active !== "Settings" && active !== "Brief" && active !== "Books" && !visibleArticles.length && <div className="empty-state">{active === "Read" ? "Articles you finish will appear here." : active === "Passed" ? "Nothing has been passed yet. Passed articles stay here until you restore them to the queue." : "Use Add source to connect an RSS feed, or save a page link, and Daymark will start filling this desk."}</div>}
 
         {active === "Sources" && <section className="sources-panel"><div className="section-heading"><div><p className="eyebrow">FOLLOWING</p><h2>From your sources</h2></div><button className="text-button" onClick={() => setShowCapture(true)}>Add RSS <span>→</span></button></div><div className="source-list">{sources.map((source, index) => <div key={source.id} className="source-row"><span className="source-logo" style={{background: sourceColors[index % sourceColors.length]}}>{source.name.charAt(0).toUpperCase()}</span><div className="source-details"><strong>{source.name}</strong><small>{source.url}</small></div><span>{source.articleCount} articles</span><div className="source-controls"><button onClick={() => openSourceEditor(source)}>Edit</button><button className="remove-source" onClick={() => setSourceToRemove(source)}>Remove</button></div></div>)}</div></section>}
       </section>
@@ -679,7 +706,7 @@ export default function Home() {
                 <small>{selectedInsight.provider} · score {selectedInsight.score ?? "n/a"}</small>
               </section>
             )}
-            <div className="reader-actions"><button onClick={() => processInsight(selectedArticle)} disabled={processingInsight === selectedArticle.id}>{selectedInsight?.summary ? "Summary ready" : processingInsight === selectedArticle.id ? "Summarizing…" : "Summarize"}</button><button className="secondary-button" onClick={() => void setReadState(selectedArticle, !selectedArticle.readAt)}>{selectedArticle.readAt ? "Mark unread" : "Mark read"}</button><a href={selectedArticle.canonicalUrl} target="_blank" rel="noreferrer">Open original source ↗</a></div>
+            <div className="reader-actions"><button onClick={() => processInsight(selectedArticle)} disabled={processingInsight === selectedArticle.id}>{selectedInsight?.summary ? "Summary ready" : processingInsight === selectedArticle.id ? "Summarizing…" : "Summarize"}</button><button className="secondary-button" onClick={() => void setReadState(selectedArticle, !selectedArticle.readAt)}>{selectedArticle.readAt ? "Mark unread" : "Mark read"}</button><button className="secondary-button" onClick={() => void setPassedState(selectedArticle, selectedArticle.status !== "passed")}>{selectedArticle.status === "passed" ? "Restore to queue" : "Pass for now"}</button><a href={selectedArticle.canonicalUrl} target="_blank" rel="noreferrer">Open original source ↗</a></div>
           </article>
         </div>
       )}
