@@ -2,7 +2,7 @@
 
 import { Dispatch, FormEvent, SetStateAction, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 type Source = {
   id: string;
@@ -156,6 +156,7 @@ function OutlineSummary({ markdown }: { markdown: string | null }) {
 }
 
 export default function Home() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [active, setActive] = useState("Brief");
   const [articles, setArticles] = useState<Article[]>([]);
@@ -186,6 +187,8 @@ export default function Home() {
   const [deepSeekApiKey, setDeepSeekApiKey] = useState("");
   const [deepSeekModel, setDeepSeekModel] = useState("deepseek-v4-flash");
   const requestedBookId = searchParams.get("book");
+  const returnTo = searchParams.get("returnTo");
+  const returnPath = returnTo && /^\/books\/(read|reading|to_read)$/.test(returnTo) ? returnTo : null;
 
   const sourceById = useMemo(
     () => new Map(sources.map((source) => [source.id, source])),
@@ -618,6 +621,10 @@ export default function Home() {
 
   function closeSelectedBook() {
     if (requestedBookId) setDismissedBookId(requestedBookId);
+    if (returnPath) {
+      router.replace(returnPath);
+      return;
+    }
     if (requestedBookId) {
       const url = new URL(window.location.href);
       url.searchParams.delete("book");
