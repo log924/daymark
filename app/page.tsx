@@ -565,6 +565,38 @@ export default function Home() {
     }
   }
 
+  async function passRemainingSourceArticles() {
+    if (!selectedLatestSource || !latestUnreadArticles.length) return;
+    const remaining = latestUnreadArticles;
+    const ids = new Set(remaining.map((article) => article.id));
+    setBusy(true);
+    setArticles((current) => current.map((article) => ids.has(article.id) ? { ...article, status: "passed" } : article));
+
+    try {
+      const results = await Promise.allSettled(remaining.map(async (article) => {
+        const response = await fetch(`/api/articles/${article.id}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ passed: true }),
+        });
+        const payload = await response.json() as { article?: Article; error?: string };
+        if (!response.ok || !payload.article) throw new Error(payload.error ?? "Unable to pass article");
+        return payload.article;
+      }));
+      const updatedById = new Map(results.filter((result): result is PromiseFulfilledResult<Article> => result.status === "fulfilled").map((result) => [result.value.id, result.value]));
+      const previousById = new Map(remaining.map((article) => [article.id, article]));
+      setArticles((current) => current.map((article) => updatedById.get(article.id) ?? previousById.get(article.id) ?? article));
+      const failures = results.length - updatedById.size;
+      setMessage(failures ? `Passed ${updatedById.size} article${updatedById.size === 1 ? "" : "s"}; ${failures} could not be passed.` : `Passed ${remaining.length} remaining article${remaining.length === 1 ? "" : "s"} from ${selectedLatestSource.name}.`);
+    } catch (error) {
+      const previousById = new Map(remaining.map((article) => [article.id, article]));
+      setArticles((current) => current.map((article) => previousById.get(article.id) ?? article));
+      setMessage(error instanceof Error ? error.message : "Unable to pass the remaining articles");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   function openArticle(article: Article) {
     setSelectedArticle(article);
     if (!article.readAt) void setReadState(article, true);
@@ -581,7 +613,6 @@ export default function Home() {
             <div key={name} className="nav-group"><button className={active === name ? "nav-item active" : "nav-item"} onClick={() => { setActive(name); if (name === "Latest") setSelectedLatestSourceId(null); }}>
               <span>{name === "Brief" ? "◒" : name === "Latest" ? "◷" : name === "Sources" ? "◉" : name === "Saved" ? "♡" : name === "Read" ? "✓" : name === "Passed" ? "⊘" : name === "Books" ? "▤" : "⚙"}</span>{name}
               {name === "Latest" && <b>{unreadCount}</b>}
-              {name === "Passed" && <b>{passedArticles.length}</b>}
             </button>{name === "Sources" && sources.length > 0 && <div className="source-nav-list">{sources.map((source, index) => { const unread = activeArticles.filter((article) => article.sourceId === source.id && !article.readAt).length; return <button key={source.id} className={active === "Latest" && selectedLatestSource?.id === source.id ? "source-nav-item active" : "source-nav-item"} onClick={() => { setActive("Latest"); setSelectedLatestSourceId(source.id); setShowAll(false); }}><span className="source-logo" style={{ background: sourceColors[index % sourceColors.length] }}>{source.name.charAt(0).toUpperCase()}</span><span>{source.name}</span><b>{unread}</b></button>; })}</div>}</div>
           ))}
         </nav>
@@ -640,7 +671,7 @@ export default function Home() {
 
         {active === "Brief" && dailyBrief && <section className="daily-brief"><div className="section-heading"><div><p className="eyebrow">DEEPSEEK DAILY BRIEF · {new Date(dailyBrief.createdAt).toLocaleString()}</p><h2>What you need to know</h2></div><button className="text-button" onClick={() => void refreshAllFeeds()} disabled={busy}>Refresh all feeds <span>↻</span></button></div><OutlineSummary markdown={dailyBrief.summary} />{briefKeyInsights.length > 0 && <div className="brief-key-insights"><p className="eyebrow">KEY CONCEPTS, TRENDS &amp; FACTS</p>{briefKeyInsights.map((insight, index) => <article className="brief-key-insight" key={`${insight.kind}-${insight.title}-${index}`}><span className={`brief-insight-kind brief-insight-kind-${insight.kind}`}>{insight.kind}</span><div><h3>{insight.title}</h3><p>{insight.detail}</p>{insight.articleIds.length > 0 && <div className="brief-insight-sources">{insight.articleIds.map((id) => { const article = articles.find((item) => item.id === id); return article ? <a key={id} href={`#article-${id}`} onClick={(event) => { event.preventDefault(); openArticle(article); }}>Source: {article.title} <span>→</span></a> : null; })}</div>}</div></article>)}</div>}<div className="brief-recommendations"><p className="eyebrow">RECOMMENDED READING</p>{briefRecommendations.map((recommendation, index) => <div className="brief-recommendation" key={index}><p>{recommendation.text}</p><div>{recommendation.articleIds.map((id) => { const article = articles.find((item) => item.id === id); return article ? <a key={id} href={`#article-${id}`} onClick={(event) => { event.preventDefault(); openArticle(article); }}>Read: {article.title} <span>→</span></a> : null; })}</div></div>)}</div></section>}
 
-        {active !== "Settings" && active !== "Brief" && active !== "Books" && <section className="section-heading"><div><p className="eyebrow">{active === "Saved" ? "SAVED" : active === "Read" ? "READING HISTORY" : active === "Passed" ? "REVIEW PASSED" : active === "Latest" ? "LATEST UNREAD" : "BY SOURCE"}</p><h2>{active === "Saved" ? "For later" : active === "Read" ? "Already read" : active === "Passed" ? "Passed for now" : active === "Latest" ? selectedLatestSource ? selectedLatestSource.name : "All unread articles" : "All incoming pieces"}</h2></div><button className="text-button" onClick={() => setShowAll(!showAll)}>{showAll ? "Show less" : "See first 6"} <span>→</span></button></section>}
+        {active !== "Settings" && active !== "Brief" && active !== "Books" && <section className="section-heading"><div><p className="eyebrow">{active === "Saved" ? "SAVED" : active === "Read" ? "READING HISTORY" : active === "Passed" ? "REVIEW PASSED" : active === "Latest" ? "LATEST UNREAD" : "BY SOURCE"}</p><h2>{active === "Saved" ? "For later" : active === "Read" ? "Already read" : active === "Passed" ? "Passed for now" : active === "Latest" ? selectedLatestSource ? selectedLatestSource.name : "All unread articles" : "All incoming pieces"}</h2></div>{active === "Latest" && selectedLatestSource && latestUnreadArticles.length > 0 ? <button className="text-button pass-all-button" onClick={() => void passRemainingSourceArticles()} disabled={busy}>Pass all remaining <span>⊘</span></button> : <button className="text-button" onClick={() => setShowAll(!showAll)}>{showAll ? "Show less" : "See first 6"} <span>→</span></button>}</section>}
 
         {active !== "Settings" && active !== "Brief" && active !== "Books" && <section className="story-grid">
           {visibleArticles.map((article, index) => {
