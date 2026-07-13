@@ -622,7 +622,7 @@ export default function Home() {
   function closeSelectedBook() {
     if (requestedBookId) setDismissedBookId(requestedBookId);
     if (returnPath) {
-      router.replace(returnPath);
+      router.back();
       return;
     }
     if (requestedBookId) {
