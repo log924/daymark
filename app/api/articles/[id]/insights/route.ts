@@ -62,10 +62,6 @@ export async function POST(request: Request, context: Params) {
     // mistaken for results generated from the extracted original article.
     const provider = `deepseek:${model}:defuddle-v2-outline`;
 
-    if (!payload.apiKey?.trim()) {
-      return Response.json({ error: "DeepSeek API key is required" }, { status: 400 });
-    }
-
     const db = getDb();
     const cached = await findLatestInsight(id, provider);
 

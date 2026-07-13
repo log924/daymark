@@ -466,7 +466,6 @@ export default function Home() {
   }
 
   async function analyzeBook(book: Book, options?: { includeFitness?: boolean; progressMessage?: string; successMessage?: string }) {
-    if (!deepSeekApiKey.trim()) { setActive("Settings"); setMessage("Add your DeepSeek API key in Settings to analyze book fit."); return; }
     setBusy(true); setMessage(options?.progressMessage ?? "Comparing this book with your reading history...");
     try {
       const response = await fetch(`/api/books/${book.id}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ apiKey: deepSeekApiKey, model: deepSeekModel, includeFitness: options?.includeFitness ?? true }) });
@@ -477,11 +476,6 @@ export default function Home() {
   }
 
   async function refreshAllFeeds() {
-    if (!deepSeekApiKey.trim()) {
-      setActive("Settings");
-      setMessage("Add your DeepSeek API key in Settings before refreshing your daily brief.");
-      return;
-    }
     setBusy(true);
     setMessage("Refreshing every RSS feed and preparing your Chinese brief…");
     try {
@@ -500,12 +494,6 @@ export default function Home() {
   }
 
   async function processInsight(article: Article) {
-    if (!deepSeekApiKey.trim()) {
-      setActive("Settings");
-      setMessage("Add your DeepSeek API key in Settings first.");
-      return;
-    }
-
     setSelectedArticle(article);
     setProcessingInsight(article.id);
     setMessage("Capturing the original article, then preparing its Chinese outline...");
@@ -592,11 +580,11 @@ export default function Home() {
             <div>
               <p className="eyebrow">AI PROCESSING</p>
               <h2>DeepSeek</h2>
-              <p>Your API key is remembered only in this browser for localhost use. Daymark sends it to the local server only when it captures an original article and generates its Chinese outline summary.</p>
+              <p>Enter a key here to use it only on this browser, or configure the Worker’s <code>DEEPSEEK_API_KEY</code> secret once to use it securely from every device. The Worker secret is never sent back to a browser.</p>
             </div>
             <div className="ai-settings">
               <label>
-                <span>API key</span>
+                <span>Browser API key (optional)</span>
                 <input type="password" value={deepSeekApiKey} onChange={(event) => setDeepSeekApiKey(event.target.value)} placeholder="sk-..." />
               </label>
               <label>

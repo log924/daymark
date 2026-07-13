@@ -12,7 +12,6 @@ export async function POST(request: Request) {
   try {
     await ensureDatabase();
     const payload = await request.json().catch(() => ({})) as { apiKey?: string; model?: DeepSeekModel };
-    if (!payload.apiKey?.trim()) return Response.json({ error: "DeepSeek API key is required" }, { status: 400 });
     const db = getDb();
     const sourceRows = await db.select().from(sources);
     const newArticles: Array<{ id: string; title: string; source: string; content: string | null }> = [];

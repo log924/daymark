@@ -1,3 +1,5 @@
+import { env } from "cloudflare:workers";
+
 type ArticlePayload = {
   title: string;
   url: string;
@@ -12,7 +14,8 @@ export type DeepSeekModel =
   | "deepseek-reasoner";
 
 export type AiSettings = {
-  apiKey: string;
+  /** A browser-supplied key is optional when the Worker has a server-side secret. */
+  apiKey?: string;
   model: DeepSeekModel;
 };
 
@@ -52,16 +55,21 @@ function parseJsonObject(text: string) {
   }
 }
 
+function resolveApiKey(apiKey?: string) {
+  // Keep the deployment credential out of browser storage and API responses.
+  // The cast allows this optional Worker secret without requiring it locally.
+  const configuredKey = (env as { DEEPSEEK_API_KEY?: string }).DEEPSEEK_API_KEY?.trim();
+  const key = apiKey?.trim() || configuredKey;
+  if (!key) throw new Error("DeepSeek API key is required. Add it in Settings or configure the Worker secret DEEPSEEK_API_KEY.");
+  return key;
+}
+
 export async function generateArticleInsight(
   article: ArticlePayload,
   settings: AiSettings,
 ): Promise<GeneratedInsight> {
-  const apiKey = settings.apiKey.trim();
+  const apiKey = resolveApiKey(settings.apiKey);
   const model = settings.model || "deepseek-v4-flash";
-
-  if (!apiKey) {
-    throw new Error("DeepSeek API key is required");
-  }
 
   const response = await fetch("https://api.deepseek.com/chat/completions", {
     method: "POST",
@@ -115,8 +123,7 @@ export async function generateDailyBrief(
   articles: DailyBriefArticle[],
   settings: AiSettings,
 ): Promise<GeneratedDailyBrief> {
-  const apiKey = settings.apiKey.trim();
-  if (!apiKey) throw new Error("DeepSeek API key is required");
+  const apiKey = resolveApiKey(settings.apiKey);
 
   const response = await fetch("https://api.deepseek.com/chat/completions", {
     method: "POST",
@@ -157,8 +164,7 @@ export async function generateBookAnalysis(
   context: { books: BookContextItem[]; articles: BookContextItem[]; tagLibrary: string[] },
   settings: AiSettings,
 ): Promise<GeneratedBookAnalysis> {
-  const apiKey = settings.apiKey.trim();
-  if (!apiKey) throw new Error("DeepSeek API key is required");
+  const apiKey = resolveApiKey(settings.apiKey);
   const response = await fetch("https://api.deepseek.com/chat/completions", {
     method: "POST",
     headers: { authorization: `Bearer ${apiKey}`, "content-type": "application/json" },
