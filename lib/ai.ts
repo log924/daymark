@@ -51,7 +51,14 @@ function parseJsonObject(text: string) {
     return JSON.parse(text) as Partial<GeneratedInsight>;
   } catch {
     const match = text.match(/\{[\s\S]*\}/);
-    return match ? (JSON.parse(match[0]) as Partial<GeneratedInsight>) : {};
+    if (!match) return {};
+    try {
+      return JSON.parse(match[0]) as Partial<GeneratedInsight>;
+    } catch {
+      // Model responses occasionally contain malformed JSON despite requesting
+      // JSON mode. Let the caller's validation and retry path handle it.
+      return {};
+    }
   }
 }
 
