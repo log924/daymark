@@ -2,7 +2,6 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "daymark",
   "compatibility_date": "2026-07-18",
-  "compatibility_flags": ["nodejs_compat"],
   "assets": {
     "directory": "dist/client",
     "not_found_handling": "none",
