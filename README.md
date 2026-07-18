@@ -44,25 +44,17 @@ Cloudflare Worker secret with the same name.
 ## Daily editions
 
 Manual **Refresh feeds** only imports new RSS entries into the reading inbox.
-It never changes the current daily edition.
-
-The production Worker has a `scheduled` handler ready for a Cloudflare Cron
-trigger. Configure `0 22 * * *` (UTC) to refresh feeds and publish the 06:00
-Asia/Shanghai edition. Each edition covers articles imported during the
-preceding 24 hours (from 06:00 to 06:00 Beijing time). GoReader keeps only the
-current issue and replaces it at the next scheduled run.
-
-For local visual testing, open Brief and choose **Preview today**. This
-explicitly rebuilds only the current issue; it does not fetch feeds. With no
-local DeepSeek key, the edition still renders from the deterministic reading
-path and uses an AI-summary fallback.
+It never changes the current daily edition. Use **Generate today's Digest** in
+the top bar when you want to publish it. The button checks first: if the current
+06:00–06:00 Beijing edition already exists, it makes no changes or AI request.
+Otherwise it selects articles imported from yesterday at 06:00 through today at
+06:00 Beijing time. GoReader keeps only the current issue.
 
 ## Cloudflare Workers deployment
 
 The app Worker receives the production `daymark-db` binding during the build.
-A small `daymark-daily` Worker owns the 06:00 Asia/Shanghai Cron trigger and
-shares that D1 database. After authenticating Wrangler with the intended
-Cloudflare account, build and deploy with:
+After authenticating Wrangler with the intended Cloudflare account, build and
+deploy with:
 
 ```bash
 npm run build
@@ -70,12 +62,10 @@ npm run deploy:cloudflare
 ```
 
 For Cloudflare's Git deployment, use `npm run build` as the build command and
-`npm run deploy:cloudflare` as the deploy command. The latter deploys the app
-and then its separate scheduler Worker.
+`npm run deploy:cloudflare` as the deploy command.
 
-Set `DEEPSEEK_API_KEY` as a Worker secret for both `daymark` and
-`daymark-daily` before the first scheduled edition. Do not commit it in any
-configuration file.
+Set `DEEPSEEK_API_KEY` as a Worker secret for `daymark` before generating a
+Digest. Do not commit it in any configuration file.
 
 ## Included Shape
 

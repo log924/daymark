@@ -72,13 +72,13 @@ function fallbackBrief(selected: ReadingPathArticle[]): GeneratedDailyBrief {
   };
 }
 
-export async function generateDailyIssue(settings: AiSettings, options?: { force?: boolean; now?: number }) {
+export async function generateDailyIssue(settings: AiSettings, options?: { now?: number }) {
   await ensureDatabase();
   const db = getDb();
   const now = options?.now ?? Date.now();
   const window = dailyIssueWindow(now);
   const [existing] = await db.select().from(dailyBriefs).where(eq(dailyBriefs.issueDate, window.issueDate)).limit(1);
-  if (existing && !options?.force) return { brief: existing, created: false, aiFallback: false, window };
+  if (existing) return { brief: existing, created: false, aiFallback: false, window };
 
   const [articleRows, sourceRows] = await Promise.all([
     db.select().from(articles).where(and(gte(articles.importedAt, window.start), lt(articles.importedAt, window.end))).orderBy(asc(articles.importedAt)),
@@ -111,9 +111,7 @@ export async function generateDailyIssue(settings: AiSettings, options?: { force
     sections: JSON.stringify(sections),
     createdAt: now,
   };
-  const [brief] = existing
-    ? await db.update(dailyBriefs).set(values).where(eq(dailyBriefs.id, existing.id)).returning()
-    : await db.insert(dailyBriefs).values({ id: crypto.randomUUID(), ...values }).returning();
+  const [brief] = await db.insert(dailyBriefs).values({ id: crypto.randomUUID(), ...values }).returning();
   // The product intentionally keeps one current issue rather than an archive.
   await db.delete(dailyBriefs).where(ne(dailyBriefs.id, brief.id));
   return { brief, created: !existing, aiFallback, window };

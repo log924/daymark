@@ -547,18 +547,20 @@ export default function Home() {
     } finally { setBusy(false); }
   }
 
-  async function previewDailyIssue() {
+  async function generateTodayDigest() {
     setBusy(true);
-    setMessage("Building today’s local daily-edition preview…");
+    setMessage("Generating today’s Digest from the completed 06:00–06:00 window…");
     try {
       const response = await fetch("/api/briefs/generate", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ apiKey: deepSeekApiKey, model: deepSeekModel, force: true }),
+        body: JSON.stringify({ apiKey: deepSeekApiKey, model: deepSeekModel }),
       });
-      const payload = await response.json() as { brief?: DailyBrief; aiFallback?: boolean; error?: string };
+      const payload = await response.json() as { brief?: DailyBrief; created?: boolean; aiFallback?: boolean; error?: string };
       if (!response.ok || !payload.brief) throw new Error(payload.error ?? "Unable to build daily issue");
-      await loadData(payload.aiFallback ? "Daily edition saved with the local deterministic fallback." : "Today’s daily edition preview is ready.");
+      await loadData(payload.created
+        ? payload.aiFallback ? "Today’s Digest was saved with the deterministic fallback." : "Today’s Digest is ready."
+        : "Today’s Digest already exists; nothing was changed.");
       setDailyBrief(payload.brief);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to build daily issue");
@@ -707,7 +709,7 @@ export default function Home() {
       <section className="content" id="top">
         <header className="topbar">
           <div className="crumb"><span className="sun">☀</span><span>{new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</span><em>•</em><span>{message}</span></div>
-          <div className="top-actions"><button className="refresh-button" onClick={() => void refreshAllFeeds()} disabled={busy}>{busy ? "Refreshing…" : "↻ Refresh feeds"}</button><button className="add-button" onClick={() => setShowCapture(true)}>+ Add {active === "Books" ? "book" : "source"}</button></div>
+          <div className="top-actions"><button className="refresh-button" onClick={() => void refreshAllFeeds()} disabled={busy}>{busy ? "Refreshing…" : "↻ Refresh feeds"}</button><button className="refresh-button" onClick={() => void generateTodayDigest()} disabled={busy}>{busy ? "Generating…" : "✦ Generate today’s Digest"}</button><button className="add-button" onClick={() => setShowCapture(true)}>+ Add {active === "Books" ? "book" : "source"}</button></div>
         </header>
 
         <div className="brief-head">
@@ -739,7 +741,6 @@ export default function Home() {
               </label>
               <div className="setting-row"><span>Provider</span><strong>DeepSeek API</strong></div>
               <div className="setting-row"><span>Cache</span><strong>D1 article_insights</strong></div>
-              <div className="setting-row"><span>Local daily preview</span><button className="text-button" onClick={() => void previewDailyIssue()} disabled={busy}>Generate today&apos;s issue <span>↻</span></button></div>
             </div>
           </section>
         )}
@@ -767,7 +768,7 @@ export default function Home() {
                 const timestamp = matched?.importedAt ?? matched?.publishedAt ?? matched?.savedAt ?? null;
                 return <article className="timeline-story daily-edition-story" key={article.id} role="button" tabIndex={0} onClick={() => matched && openArticle(matched)} onKeyDown={(event) => event.key === "Enter" && matched && openArticle(matched)}><time className="timeline-time">{timestamp ? new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(timestamp) : "Daily"}</time><div className="timeline-rail" aria-hidden="true"><span /></div><div className="timeline-card"><div className="timeline-card-meta"><span className="source-dot"/><span>{article.source}</span><em>·</em><span>{relativeTime(timestamp)}</span></div><h3>{article.title}</h3><p>{matched ? articleSnippet(matched) : "Open this daily-edition selection to read the original source."}</p><div className="why-now"><strong>Why now</strong><span>{readingPathReasons.get(article.id) ?? "Selected for today’s daily edition after the 06:00 import window."}</span></div><div className="timeline-actions"><button className="read" onClick={(event) => { event.stopPropagation(); if (matched) openArticle(matched); }}>Open <span>→</span></button></div></div></article>;
               })}</div></section>)}</div>
-            </> : <div className="empty-state">The first daily edition will arrive at 06:00. For local testing, choose <strong>Preview today</strong>.</div>}
+            </> : <div className="empty-state">No Digest has been generated for the completed 06:00–06:00 window yet. Use <strong>Generate today’s Digest</strong> above.</div>}
           </article>
         </section>}
 
