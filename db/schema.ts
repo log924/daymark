@@ -4,7 +4,7 @@ export const sources = sqliteTable("sources", {
   id: text("id").primaryKey(), name: text("name").notNull(), url: text("url").notNull(), kind: text("kind").notNull(), createdAt: integer("created_at").notNull(),
 });
 export const articles = sqliteTable("articles", {
-  id: text("id").primaryKey(), sourceId: text("source_id").references(() => sources.id), title: text("title").notNull(), canonicalUrl: text("canonical_url").notNull(), content: text("content"), publishedAt: integer("published_at"), savedAt: integer("saved_at"), readAt: integer("read_at"), status: text("status").notNull().default("new"),
+  id: text("id").primaryKey(), sourceId: text("source_id").references(() => sources.id), title: text("title").notNull(), canonicalUrl: text("canonical_url").notNull(), content: text("content"), publishedAt: integer("published_at"), importedAt: integer("imported_at"), savedAt: integer("saved_at"), readAt: integer("read_at"), status: text("status").notNull().default("new"),
 });
 export const articleInsights = sqliteTable("article_insights", {
   id: text("id").primaryKey(), articleId: text("article_id").notNull().references(() => articles.id), provider: text("provider").notNull(), summary: text("summary"), translationZh: text("translation_zh"), score: integer("score"), createdAt: integer("created_at").notNull(),
@@ -15,6 +15,8 @@ export const dailyBriefs = sqliteTable("daily_briefs", {
   keyInsights: text("key_insights").notNull().default("[]"),
   recommendations: text("recommendations").notNull(),
   articleIds: text("article_ids").notNull(),
+  issueDate: text("issue_date"),
+  sections: text("sections").notNull().default("[]"),
   createdAt: integer("created_at").notNull(),
 });
 export const books = sqliteTable("books", {

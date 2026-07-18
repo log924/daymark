@@ -36,6 +36,7 @@ export async function POST(_request: Request, context: Params) {
 
     const xml = await response.text();
     const feed = parseFeed(xml, source.url);
+    const importedAt = Date.now();
     let created = 0;
     let skipped = 0;
 
@@ -61,6 +62,7 @@ export async function POST(_request: Request, context: Params) {
         canonicalUrl: item.url,
         content: item.content,
         publishedAt: item.publishedAt,
+        importedAt,
         savedAt: null,
         status: "new",
       });

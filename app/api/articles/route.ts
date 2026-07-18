@@ -2,6 +2,7 @@ import { desc, eq } from "drizzle-orm";
 import { getDb } from "../../../db";
 import { articles } from "../../../db/schema";
 import { ensureDatabase } from "../../../lib/bootstrap";
+import { normalizeArticleUrl } from "../../../lib/article-candidates";
 import { toRouteErrorMessage } from "../../../lib/route-errors";
 
 export async function GET() {
@@ -39,9 +40,7 @@ export async function POST(request: Request) {
 
     let canonicalUrl: string;
     try {
-      const parsed = new URL(rawUrl);
-      parsed.hash = "";
-      canonicalUrl = parsed.toString();
+      canonicalUrl = normalizeArticleUrl(rawUrl);
     } catch {
       return Response.json({ error: "url must be a valid URL" }, { status: 400 });
     }
@@ -67,6 +66,7 @@ export async function POST(request: Request) {
         canonicalUrl,
         content,
         publishedAt: null,
+        importedAt: now,
         savedAt: now,
         status: "saved",
       })

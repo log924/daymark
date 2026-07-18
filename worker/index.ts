@@ -1,6 +1,8 @@
 /** Cloudflare Worker entry point for the vinext-starter template. */
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
+import { generateDailyIssue } from "../lib/daily-issue";
+import { refreshAllSources } from "../lib/feed-refresh";
 
 interface Env {
   ASSETS: Fetcher;
@@ -18,6 +20,11 @@ interface Env {
 interface ExecutionContext {
   waitUntil(promise: Promise<unknown>): void;
   passThroughOnException(): void;
+}
+
+interface ScheduledController {
+  cron: string;
+  scheduledTime: number;
 }
 
 // Image security config. SVG sources with .svg extension auto-skip the
@@ -42,6 +49,15 @@ const worker = {
     }
 
     return handler.fetch(request, env, ctx);
+  },
+
+  // Cloudflare Cron expressions are UTC. Configure `0 22 * * *` in the
+  // production Worker to publish the 06:00 Asia/Shanghai daily edition.
+  async scheduled(_controller: ScheduledController, _env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil((async () => {
+      await refreshAllSources();
+      await generateDailyIssue({ model: "deepseek-v4-flash" });
+    })());
   },
 };
 

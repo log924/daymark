@@ -13,13 +13,13 @@ export async function ensureDatabase() {
       "CREATE TABLE IF NOT EXISTS sources (id text PRIMARY KEY NOT NULL, name text NOT NULL, url text NOT NULL, kind text NOT NULL, created_at integer NOT NULL)",
     ),
     d1.prepare(
-      "CREATE TABLE IF NOT EXISTS articles (id text PRIMARY KEY NOT NULL, source_id text, title text NOT NULL, canonical_url text NOT NULL, content text, published_at integer, saved_at integer, read_at integer, status text DEFAULT 'new' NOT NULL, FOREIGN KEY (source_id) REFERENCES sources(id))",
+      "CREATE TABLE IF NOT EXISTS articles (id text PRIMARY KEY NOT NULL, source_id text, title text NOT NULL, canonical_url text NOT NULL, content text, published_at integer, imported_at integer, saved_at integer, read_at integer, status text DEFAULT 'new' NOT NULL, FOREIGN KEY (source_id) REFERENCES sources(id))",
     ),
     d1.prepare(
       "CREATE TABLE IF NOT EXISTS article_insights (id text PRIMARY KEY NOT NULL, article_id text NOT NULL, provider text NOT NULL, summary text, translation_zh text, score integer, created_at integer NOT NULL, FOREIGN KEY (article_id) REFERENCES articles(id))",
     ),
     d1.prepare(
-      "CREATE TABLE IF NOT EXISTS daily_briefs (id text PRIMARY KEY NOT NULL, summary text NOT NULL, key_insights text NOT NULL DEFAULT '[]', recommendations text NOT NULL, article_ids text NOT NULL, created_at integer NOT NULL)",
+      "CREATE TABLE IF NOT EXISTS daily_briefs (id text PRIMARY KEY NOT NULL, summary text NOT NULL, key_insights text NOT NULL DEFAULT '[]', recommendations text NOT NULL, article_ids text NOT NULL, issue_date text, sections text NOT NULL DEFAULT '[]', created_at integer NOT NULL)",
     ),
     d1.prepare(
       "CREATE TABLE IF NOT EXISTS books (id text PRIMARY KEY NOT NULL, title text NOT NULL, author text, canonical_url text, cover_url text, description text, subjects text, isbn text, published_year text, status text DEFAULT 'to_read' NOT NULL, status_changed_at integer, personal_rating integer, interest_score integer, analysis text, ai_tags text, connections text, created_at integer NOT NULL, updated_at integer NOT NULL)",
@@ -41,6 +41,17 @@ export async function ensureDatabase() {
   }
 
   try {
+    await d1.prepare("ALTER TABLE articles ADD COLUMN imported_at integer").run();
+  } catch (error) {
+    if (!(error instanceof Error) || !/duplicate column name/i.test(error.message)) throw error;
+  }
+  // Imported time did not exist before this migration. For those historical
+  // rows only, publication time is the closest available boundary; new feed
+  // entries always receive their real ingestion timestamp.
+  await d1.prepare("UPDATE articles SET imported_at = COALESCE(imported_at, published_at, saved_at) WHERE imported_at IS NULL").run();
+  await d1.prepare("CREATE INDEX IF NOT EXISTS articles_imported_idx ON articles(imported_at)").run();
+
+  try {
     await d1.prepare("ALTER TABLE books ADD COLUMN status_changed_at integer").run();
   } catch (error) {
     if (!(error instanceof Error) || !/duplicate column name/i.test(error.message)) {
@@ -55,6 +66,16 @@ export async function ensureDatabase() {
       throw error;
     }
   }
+
+  for (const column of ["issue_date text", "sections text NOT NULL DEFAULT '[]'"]) {
+    try {
+      await d1.prepare(`ALTER TABLE daily_briefs ADD COLUMN ${column}`).run();
+    } catch (error) {
+      if (!(error instanceof Error) || !/duplicate column name/i.test(error.message)) throw error;
+    }
+  }
+
+  await d1.prepare("CREATE UNIQUE INDEX IF NOT EXISTS daily_briefs_issue_date_idx ON daily_briefs(issue_date)").run();
 
   for (const column of ["personal_rating integer", "ai_tags text"]) {
     try {

@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Daymark — Your morning reading brief",
   description: "A private editorial desk for the things worth your attention.",
-  openGraph: { title: "Daymark", description: "Your morning reading brief", images: ["/og.png"] },
-  twitter: { card: "summary_large_image", title: "Daymark", description: "Your morning reading brief", images: ["/og.png"] },
+  openGraph: { title: "Daymark", description: "Make room for what matters.", images: ["/og-reading-path.png"] },
+  twitter: { card: "summary_large_image", title: "Daymark", description: "Make room for what matters.", images: ["/og-reading-path.png"] },
   icons: {
     icon: "/favicon.svg",
     shortcut: "/favicon.svg",

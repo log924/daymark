@@ -1,0 +1,6 @@
+# Local-only Worker secrets. Copy this file to `.dev.vars` and add your own
+# value before using DeepSeek-powered summaries or daily briefs.
+#
+# This file is ignored by Git. Do not put production credentials in any
+# committed file.
+DEEPSEEK_API_KEY=replace-with-your-local-deepseek-key

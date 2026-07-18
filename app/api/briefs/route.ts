@@ -7,8 +7,8 @@ import { toRouteErrorMessage } from "../../../lib/route-errors";
 export async function GET() {
   try {
     await ensureDatabase();
-    const [brief] = await getDb().select().from(dailyBriefs).where(isNotNull(dailyBriefs.issueDate)).orderBy(desc(dailyBriefs.issueDate)).limit(1);
-    return Response.json({ brief: brief ?? null });
+    const briefs = await getDb().select().from(dailyBriefs).where(isNotNull(dailyBriefs.issueDate)).orderBy(desc(dailyBriefs.issueDate)).limit(90);
+    return Response.json({ briefs });
   } catch (error) {
     return Response.json({ error: toRouteErrorMessage(error) }, { status: 500 });
   }

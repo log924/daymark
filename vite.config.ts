@@ -3,8 +3,10 @@ import { defineConfig } from "vite";
 import hostingConfig from "./.openai/hosting.json";
 import { sites } from "./build/sites-vite-plugin";
 
-const D1_DATABASE_ID =
-  "eb1b83fe-e7a6-4f4c-b185-9efa6d5900d5";
+// This identifier is only for Miniflare's local D1 simulation. It must never
+// be the production D1 database ID, so local development cannot accidentally
+// target remote reading data.
+const LOCAL_D1_DATABASE_ID = "00000000-0000-0000-0000-000000000001";
 
 const { d1, r2 } = hostingConfig;
 
@@ -18,8 +20,8 @@ const localBindingConfig = {
     ? [
         {
           binding: d1,
-          database_name: "site-creator-d1",
-          database_id: D1_DATABASE_ID,
+          database_name: "goreader-local",
+          database_id: LOCAL_D1_DATABASE_ID,
         },
       ]
     : [],
@@ -53,6 +55,10 @@ export default defineConfig(async () => {
       cloudflare({
         viteEnvironment: { name: "rsc", childEnvironments: ["ssr"] },
         config: localBindingConfig,
+        // Keep Miniflare state inside this repository and never proxy bindings
+        // to Cloudflare while `npm run dev` is running.
+        persistState: { path: ".wrangler/goreader-local" },
+        remoteBindings: false,
       }),
     ],
   };

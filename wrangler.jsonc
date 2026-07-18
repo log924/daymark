@@ -1,0 +1,28 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "daymark",
+  "main": "./worker/production.ts",
+  "compatibility_date": "2026-07-18",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "dist/client",
+    "not_found_handling": "none",
+    "binding": "ASSETS"
+  },
+  "images": {
+    "binding": "IMAGES"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "daymark-db",
+      "database_id": "eb1b83fe-e7a6-4f4c-b185-9efa6d5900d5"
+    }
+  ],
+  "triggers": {
+    "crons": ["0 22 * * *"]
+  },
+  "observability": {
+    "enabled": true
+  }
+}

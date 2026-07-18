@@ -1,3 +1,5 @@
+import { normalizeArticleUrl } from "./article-candidates";
+
 export type ParsedFeedItem = {
   title: string;
   url: string;
@@ -79,9 +81,7 @@ function parseDate(value: string | null) {
 
 function normalizeUrl(url: string, baseUrl: string) {
   try {
-    const parsed = new URL(url, baseUrl);
-    parsed.hash = "";
-    return parsed.toString();
+    return normalizeArticleUrl(url, baseUrl);
   } catch {
     return "";
   }
@@ -112,9 +112,15 @@ export function parseFeed(xml: string, baseUrl: string): ParsedFeed {
   const title = stripHtml(firstTag(xml, ["title"]) ?? "") || null;
   const rssItems = [...xml.matchAll(/<item\b[\s\S]*?<\/item>/gi)].map((match) => match[0]);
   const atomItems = [...xml.matchAll(/<entry\b[\s\S]*?<\/entry>/gi)].map((match) => match[0]);
+  const seenUrls = new Set<string>();
   const items = [...rssItems, ...atomItems]
     .map((entry) => parseEntry(entry, baseUrl))
     .filter((item): item is ParsedFeedItem => Boolean(item))
+    .filter((item) => {
+      if (seenUrls.has(item.url)) return false;
+      seenUrls.add(item.url);
+      return true;
+    })
     .slice(0, 50);
 
   return { title, items };
