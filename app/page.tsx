@@ -242,9 +242,6 @@ export default function Home() {
     active === "Brief" ? todayArticles : active === "Saved" ? savedArticles : active === "Read" ? readArticles : active === "Passed" ? passedArticles : active === "Latest" ? selectedLatestSourceId ? latestUnreadArticles : activeArticles.filter((article) => !article.readAt) : todayArticles;
   const selectedSource = selectedArticle?.sourceId ? sourceById.get(selectedArticle.sourceId) : null;
   const selectedInsight = selectedArticle ? insights[selectedArticle.id] : null;
-  const todayCount = todayArticles.length;
-  const unreadCount = activeArticles.filter((article) => !article.readAt).length;
-  const readingMinutes = Math.max(1, Math.round(articles.slice(0, 6).length * 4));
 
   function whyNow(article: Article) {
     const rankingReason = readingPathReasons.get(article.id);
@@ -587,7 +584,6 @@ export default function Home() {
           {["Brief", "Latest", "Saved", "Read", "Passed", "Books", "Settings"].map((name) => (
             <div key={name} className="nav-group"><button className={active === name ? "nav-item active" : "nav-item"} onClick={() => { setActive(name); if (name === "Latest") setSelectedLatestSourceId(null); }}>
               <span>{name === "Brief" ? "◒" : name === "Latest" ? "◷" : name === "Saved" ? "♡" : name === "Read" ? "✓" : name === "Passed" ? "⊘" : name === "Books" ? "▤" : "⚙"}</span>{name}
-              {name === "Latest" && <b>{unreadCount}</b>}
             </button></div>
           ))}
         </nav>
@@ -600,13 +596,6 @@ export default function Home() {
           <div className="crumb"><span className="sun">☀</span><span>{new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</span><em>•</em><span>{message}</span></div>
           <div className="top-actions"><button className="refresh-button" onClick={() => void refreshAllFeeds()} disabled={busy}>{busy ? "Refreshing…" : "↻ Refresh feeds"}</button><button className="refresh-button" onClick={() => void generateTodayDigest()} disabled={busy}>{busy ? "Generating…" : "✦ Generate today’s Digest"}</button>{active === "Books" && <button className="add-button" onClick={() => setShowCapture(true)}>+ Add book</button>}</div>
         </header>
-
-        <div className="brief-head">
-          <div><p className="eyebrow">{active === "Brief" ? "TODAY'S READING PATH" : "YOUR DAILY SELECTION"}</p><h1>{active === "Brief" ? <>Make room<br/>for <i>what matters.</i></> : <>Worth your<br/><i>attention.</i></>}</h1></div>
-          <div className="brief-note"><span className="line"/><p>{dailyBrief ? <>Today’s desk holds <strong>{todayArticles.length} pieces worth a decision.</strong></> : <>Refresh all feeds to generate a <strong>Simplified Chinese daily brief.</strong></>}</p></div>
-        </div>
-
-        <div className="stats"><div><strong>{String(todayCount).padStart(2, "0")}</strong><span>Selected today</span></div><div><strong>{articles.length}</strong><span>Total articles</span></div><div><strong>{readingMinutes}m</strong><span>Estimated reading</span></div></div>
 
         {active === "Settings" && (
           <section className="settings-panel">
