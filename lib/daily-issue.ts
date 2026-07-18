@@ -97,7 +97,11 @@ export async function generateDailyIssue(settings: AiSettings, options?: { now?:
       );
       aiFallback = false;
     } catch (error) {
-      console.warn("Daily issue AI summary unavailable; saving deterministic edition instead.", error);
+      const reason = error instanceof Error ? error.message : "unknown network error";
+      // Local Miniflare can be denied DNS/network access even when the same
+      // Worker works in Cloudflare. The deterministic edition is intentional
+      // in that case, so keep the dev log useful without dumping a long stack.
+      console.warn(`Daily issue AI summary unavailable (${reason}); saved the deterministic edition instead.`);
     }
   }
   const sections = makeSections(selected, sourceNames, new Map(generated.titleTranslations.map((item) => [item.articleId, item.titleZh])));
