@@ -7,35 +7,39 @@ import { sites } from "./build/sites-vite-plugin";
 // be the production D1 database ID, so local development cannot accidentally
 // target remote reading data.
 const LOCAL_D1_DATABASE_ID = "00000000-0000-0000-0000-000000000001";
+const PRODUCTION_D1_DATABASE_ID = "eb1b83fe-e7a6-4f4c-b185-9efa6d5900d5";
 
 const { d1, r2 } = hostingConfig;
 
 // macOS Seatbelt blocks FSEvents, so Codex previews need polling for HMR.
 const isCodexSeatbeltSandbox = process.env.CODEX_SANDBOX === "seatbelt";
 
-const localBindingConfig = {
-  main: "./worker/index.ts",
-  compatibility_flags: ["nodejs_compat"],
-  d1_databases: d1
-    ? [
-        {
-          binding: d1,
-          database_name: "goreader-local",
-          database_id: LOCAL_D1_DATABASE_ID,
-        },
-      ]
-    : [],
-  r2_buckets: r2
-    ? [
-        {
-          binding: r2,
-          bucket_name: "site-creator-r2",
-        },
-      ]
-    : [],
-};
+function bindingConfig(isProductionBuild: boolean) {
+  return {
+    main: "./worker/index.ts",
+    compatibility_flags: ["nodejs_compat"],
+    d1_databases: d1
+      ? [
+          {
+            binding: d1,
+            database_name: isProductionBuild ? "daymark-db" : "goreader-local",
+            database_id: isProductionBuild ? PRODUCTION_D1_DATABASE_ID : LOCAL_D1_DATABASE_ID,
+          },
+        ]
+      : [],
+    r2_buckets: r2
+      ? [
+          {
+            binding: r2,
+            bucket_name: "site-creator-r2",
+          },
+        ]
+      : [],
+  };
+}
 
-export default defineConfig(async () => {
+export default defineConfig(async ({ command }) => {
+  const isProductionBuild = command === "build";
   // Keep Wrangler and Miniflare state project-local. These are non-secret tool
   // settings; application environment belongs in ignored `.env*` files.
   process.env.WRANGLER_WRITE_LOGS ??= "false";
@@ -54,7 +58,7 @@ export default defineConfig(async () => {
       sites(),
       cloudflare({
         viteEnvironment: { name: "rsc", childEnvironments: ["ssr"] },
-        config: localBindingConfig,
+        config: bindingConfig(isProductionBuild),
         // Keep Miniflare state inside this repository and never proxy bindings
         // to Cloudflare while `npm run dev` is running.
         persistState: { path: ".wrangler/goreader-local" },

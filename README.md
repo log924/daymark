@@ -59,16 +59,23 @@ path and uses an AI-summary fallback.
 
 ## Cloudflare Workers deployment
 
-The committed `wrangler.jsonc` targets the production `daymark-db` D1 binding
-and includes the 06:00 Asia/Shanghai daily-edition Cron trigger. After
-authenticating Wrangler with the intended Cloudflare account, deploy with:
+The app Worker receives the production `daymark-db` binding during the build.
+A small `daymark-daily` Worker owns the 06:00 Asia/Shanghai Cron trigger and
+shares that D1 database. After authenticating Wrangler with the intended
+Cloudflare account, build and deploy with:
 
 ```bash
+npm run build
 npm run deploy:cloudflare
 ```
 
-Set `DEEPSEEK_API_KEY` as a Worker secret in Cloudflare before the first
-scheduled edition. Do not commit it in any configuration file.
+For Cloudflare's Git deployment, use `npm run build` as the build command and
+`npm run deploy:cloudflare` as the deploy command. The latter deploys the app
+and then its separate scheduler Worker.
+
+Set `DEEPSEEK_API_KEY` as a Worker secret for both `daymark` and
+`daymark-daily` before the first scheduled edition. Do not commit it in any
+configuration file.
 
 ## Included Shape
 
